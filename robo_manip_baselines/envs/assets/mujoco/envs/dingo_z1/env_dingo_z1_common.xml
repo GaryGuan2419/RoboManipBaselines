@@ -1,0 +1,23 @@
+<mujoco model="dingo_z1_common">
+  <compiler meshdir="../../robots/dingo_z1/meshes" texturedir="../../assets/textures" angle="radian"/>
+  <option timestep="0.004" integrator="implicitfast"/>
+  <size memory="2M"/>
+  <statistic extent="2.5"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0.0 0.0 0.0"/>
+    <rgba haze="1.0 1.0 1.0 1.0"/>
+    <global azimuth="90" elevation="-20"/>
+    <quality shadowsize="8192"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.9 1.0 1.0" rgb2="0.9 1.0 1.0" width="512" height="3072"/>
+    <texture name="floor" file="floor/floor1.png" type="2d"/>
+    <material name="floor" texture="floor" specular="0.2" shininess="0.3"/>
+    <texture name="wall" file="wall/wall1.png" type="cube"/>
+    <material name="wall" texture="wall" specular="0.2" shininess="0.3"/>
+    <texture name="wood" file="general/wood1.png" type="cube"/>
+    <material name="wood" texture="wood" specular="0.3" shininess="0.5"/>
+  </asset>
+</mujoco>

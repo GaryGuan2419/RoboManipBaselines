@@ -28,3 +28,6 @@ from .aloha.MujocoAlohaHandoverEnv import MujocoAlohaHandoverEnv
 from .hsr.MujocoHsrTidyupEnv import MujocoHsrTidyupEnv
 
 from .g1.MujocoG1BottlesEnv import MujocoG1BottlesEnv
+
+from .dingo_z1.MujocoDingoZ1GraspEnv import MujocoDingoZ1GraspEnv
+

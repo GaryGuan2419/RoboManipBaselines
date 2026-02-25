@@ -240,11 +240,20 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
 
     def draw_box_marker(self, pos, mat, size, rgba):
         """Draw box marker."""
-        self.mujoco_renderer.viewer.add_marker(
-            pos=pos,
-            mat=mat,
-            label="",
-            type=mujoco.mjtGeom.mjGEOM_BOX,
-            size=size,
-            rgba=rgba,
-        )
+        if hasattr(self.mujoco_renderer.viewer, "add_marker"):
+            self.mujoco_renderer.viewer.add_marker(
+                pos=pos,
+                mat=mat,
+                label="",
+                type=mujoco.mjtGeom.mjGEOM_BOX,
+                size=size,
+                rgba=rgba,
+            )
+
+    def clear_markers(self):
+        """Clear markers from the viewer."""
+        if hasattr(self.mujoco_renderer.viewer, "_markers"):
+            self.mujoco_renderer.viewer._markers = []
+        elif hasattr(self.mujoco_renderer.viewer, "user_geoms"):
+            # Some viewers use user_geoms
+            pass

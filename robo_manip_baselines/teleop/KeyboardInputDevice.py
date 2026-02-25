@@ -137,7 +137,16 @@ class KeyboardInputDevice(InputDeviceBase):
 
         target_se3 = self.arm_manager.target_se3.copy()
         target_se3.translation += delta_pos
-        target_se3.rotation = pin.rpy.rpyToMatrix(*delta_rpy) @ target_se3.rotation
+        
+        # Multiply rotation
+        new_rot = pin.rpy.rpyToMatrix(*delta_rpy) @ target_se3.rotation
+        
+        # Critically important: Re-orthogonalize the rotation matrix
+        # Repeated matrix multiplication causes floating-point drift, moving the matrix out of SO(3).
+        # This causes pin.log() in IK to fail/hang.
+        quat = pin.Quaternion(new_rot)
+        quat.normalize()
+        target_se3.rotation = quat.matrix()
 
         self.arm_manager.set_command_eef_pose(target_se3)
 

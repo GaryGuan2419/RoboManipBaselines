@@ -107,6 +107,13 @@ register(
     entry_point="robo_manip_baselines.envs.mujoco:MujocoG1BottlesEnv",
 )
 
+## Dingo+Z1
+register(
+    id="robo_manip_baselines/MujocoDingoZ1GraspEnv-v0",
+    entry_point="robo_manip_baselines.envs.mujoco:MujocoDingoZ1GraspEnv",
+)
+
+
 # Isaac
 register(
     id="robo_manip_baselines/IsaacUR5eChainEnv-v0",

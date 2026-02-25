@@ -1,0 +1,43 @@
+<mujoco model="dingo_z1_grasp">
+  <include file="./env_dingo_z1_common.xml"/>
+
+  <asset>
+    <!-- Object materials -->
+    <texture name="cube_tex" type="cube" file="general/metal2.png"/>
+    <material name="cube_mat" texture="cube_tex" rgba="0.2 0.6 0.9 1.0" specular="1.0" shininess="1.0"/>
+    <material name="target_mat" rgba="0.9 0.2 0.2 0.5" specular="0.3" shininess="0.3"/>
+  </asset>
+
+  <include file="../../robots/dingo_z1/dingo_z1_body.xml"/>
+
+  <worldbody>
+    <!-- Single angled overhead camera to provide depth perception without performance overhead -->
+    <camera name="front" pos="1.2 -0.8 1.2" mode="targetbody" target="object"/>
+
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true" diffuse="0.3 0.3 0.3"/>
+
+    <geom name="floor" size="0 0 0.05" type="plane" material="floor" pos="0 0 0.0"/>
+
+    <!-- Walls -->
+    <geom name="wall1" type="box" size="10 10 0.01" pos="10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall2" type="box" size="10 10 0.01" pos="-10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall3" type="box" size="10 10 0.01" pos="0 10 10" zaxis="0 1 0" material="wall"/>
+    <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall"/>
+
+    <!-- Graspable object (cube on floor) - Moved closer to robot -->
+    <body name="object" pos="0.35 0.0 0.03">
+      <freejoint name="object_freejoint"/>
+      <geom type="box" size="0.03 0.03 0.03" material="cube_mat" mass="0.1"/>
+    </body>
+
+    <!-- Target location - Moved closer to robot -->
+    <body name="target" pos="0.35 -0.2 0.005">
+      <geom type="box" size="0.05 0.05 0.005" material="target_mat" contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+
+  <!-- Lock the Dingo mobile base for grasping data collection -->
+  <equality>
+    <weld body1="base_link" />
+  </equality>
+</mujoco>

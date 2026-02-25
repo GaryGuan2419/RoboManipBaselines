@@ -43,6 +43,11 @@ class TeleopMain:
             action="store_true",
             help="Show this help message and continue",
         )
+        parser.add_argument(
+            "--headless",
+            action="store_true",
+            help="Disable human rendering mode (Mujoco Viewer) for better performance",
+        )
 
         self.args, remaining_argv = parser.parse_known_args()
         sys.argv = [sys.argv[0]] + remaining_argv
@@ -80,6 +85,9 @@ class TeleopMain:
         else:
             with open(self.args.config, "r") as f:
                 config = yaml.safe_load(f)
+
+        if self.args.headless:
+            config["render_mode"] = "rgb_array"
 
         teleop = Teleop(**config)
         teleop.run()

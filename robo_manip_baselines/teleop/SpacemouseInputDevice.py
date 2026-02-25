@@ -60,7 +60,12 @@ class SpacemouseInputDevice(InputDeviceBase):
 
         target_se3 = self.arm_manager.target_se3.copy()
         target_se3.translation += delta_pos
-        target_se3.rotation = pin.rpy.rpyToMatrix(*delta_rpy) @ target_se3.rotation
+        
+        # Multiply rotation and re-orthogonalize
+        new_rot = pin.rpy.rpyToMatrix(*delta_rpy) @ target_se3.rotation
+        quat = pin.Quaternion(new_rot)
+        quat.normalize()
+        target_se3.rotation = quat.matrix()
 
         self.arm_manager.set_command_eef_pose(target_se3)
 

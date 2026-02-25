@@ -189,14 +189,15 @@ class TeleopBase(OperationDataMixin, ABC):
     MotionManagerClass = MotionManager
     DataManagerClass = DataManager
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
         # Setup arguments
         self.setup_args()
 
         set_random_seed(self.args.seed)
 
         # Setup gym environment
-        self.setup_env()
+        self.setup_env(**self.kwargs)
         self.demo_name = self.args.demo_name or remove_suffix(self.env.spec.name, "Env")
         self.env.reset(seed=self.args.seed)
         if self.args.target_task is not None:
@@ -448,6 +449,8 @@ class TeleopBase(OperationDataMixin, ABC):
         self.reset_flag = True
         self.quit_flag = False
         self.iteration_duration_list = []
+        self._first_draw = True
+        self._loop_count = 0
 
         while True:
             iteration_start_time = time.time()
@@ -457,6 +460,11 @@ class TeleopBase(OperationDataMixin, ABC):
                 self.reset_flag = False
 
             self.phase_manager.pre_update()
+            
+            # Explicitly clear old markers before drawing new ones (fixes progressive slowdown)
+            if hasattr(self.env.unwrapped, "clear_markers"):
+                self.env.unwrapped.clear_markers()
+            
             self.motion_manager.draw_markers()
 
             action = np.concatenate(
@@ -466,12 +474,29 @@ class TeleopBase(OperationDataMixin, ABC):
                 ]
             )
 
-            if self.phase_manager.is_phases(["TeleopPhase", "ReplayPhase"]):
+            # Whether we need images this iteration (for recording or drawing)
+            need_images_for_recording = self.phase_manager.is_phases(["TeleopPhase", "ReplayPhase"])
+            
+            self.obs, self.reward, _, _, self.info = self.env.step(action)
+            
+            self._loop_count += 1
+            need_images_for_drawing = (self._loop_count % 5 == 0)
+
+            # Lazy render images only when strictly required by recording or drawing
+            if need_images_for_recording or need_images_for_drawing:
+                if hasattr(self.env.unwrapped, "get_images"):
+                     # Mix the fully rendered images into self.info
+                     images_info = self.env.unwrapped.get_images()
+                     self.info.update(images_info)
+
+            if need_images_for_recording:
                 self.record_data()
 
-            self.obs, self.reward, _, _, self.info = self.env.step(action)
-
-            self.draw_image()
+            if need_images_for_drawing:
+                try:
+                    self.draw_image()
+                except Exception as e:
+                     print(f"Warning: Failed to draw image: {e}")
 
             if self.args.plot_pointcloud:
                 self.draw_pointcloud()
@@ -614,10 +639,12 @@ class TeleopBase(OperationDataMixin, ABC):
                 phase_image,
             )
         )
-        cv2.namedWindow(
-            "image",
-            flags=(cv2.WINDOW_AUTOSIZE | cv2.WINDOW_KEEPRATIO | cv2.WINDOW_GUI_NORMAL),
-        )
+        if self._first_draw:
+            self._first_draw = False
+            cv2.namedWindow(
+                "image",
+                flags=(cv2.WINDOW_AUTOSIZE | cv2.WINDOW_KEEPRATIO | cv2.WINDOW_GUI_NORMAL),
+            )
         cv2.imshow("image", cv2.cvtColor(window_image, cv2.COLOR_RGB2BGR))
 
     def draw_pointcloud(self):
