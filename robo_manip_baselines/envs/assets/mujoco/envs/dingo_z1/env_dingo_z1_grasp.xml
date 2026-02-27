@@ -11,10 +11,12 @@
   <include file="../../robots/dingo_z1/dingo_z1_body.xml"/>
 
   <worldbody>
-    <!-- Single angled overhead camera to provide depth perception without performance overhead -->
-    <camera name="front" pos="1.2 -0.8 1.2" mode="targetbody" target="object"/>
+    <!-- Multiple cameras to match standard baseline datasets -->
+    <camera name="front" pos="1.3 0.0 1.2" mode="targetbody" target="object" fovy="45"/>
+    <camera name="left_side" pos="0.5 0.8 1.0" mode="targetbody" target="object" fovy="45"/>
+    <camera name="right_side" pos="0.5 -0.8 1.0" mode="targetbody" target="object" fovy="45"/>
 
-    <light pos="0 0 1.5" dir="0 0 -1" directional="true" diffuse="0.3 0.3 0.3"/>
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true" diffuse="0.3 0.3 0.3" castshadow="false"/>
 
     <geom name="floor" size="0 0 0.05" type="plane" material="floor" pos="0 0 0.0"/>
 
@@ -24,14 +26,28 @@
     <geom name="wall3" type="box" size="10 10 0.01" pos="0 10 10" zaxis="0 1 0" material="wall"/>
     <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall"/>
 
-    <!-- Graspable object (cube on floor) - Moved closer to robot -->
-    <body name="object" pos="0.35 0.0 0.03">
-      <freejoint name="object_freejoint"/>
-      <geom type="box" size="0.03 0.03 0.03" material="cube_mat" mass="0.1"/>
+    <!-- Work table in front of robot -->
+    <body name="table" pos="0.7 0.0 0.25">
+      <geom type="box" size="0.25 0.3 0.01" material="cube_mat" friction="2.0 0.1 0.001" mass="10"/>
+      <!-- Table legs -->
+      <geom type="cylinder" size="0.02 0.25" pos="0.2 0.25 -0.25" rgba="0.3 0.3 0.3 1"/>
+      <geom type="cylinder" size="0.02 0.25" pos="-0.2 0.25 -0.25" rgba="0.3 0.3 0.3 1"/>
+      <geom type="cylinder" size="0.02 0.25" pos="0.2 -0.25 -0.25" rgba="0.3 0.3 0.3 1"/>
+      <geom type="cylinder" size="0.02 0.25" pos="-0.2 -0.25 -0.25" rgba="0.3 0.3 0.3 1"/>
+      <!-- Table edge rails -->
+      <geom type="box" size="0.25 0.005 0.015" pos="0.0 0.295 0.02" rgba="0.4 0.4 0.4 1"/>
+      <geom type="box" size="0.25 0.005 0.015" pos="0.0 -0.295 0.02" rgba="0.4 0.4 0.4 1"/>
+      <geom type="box" size="0.005 0.3 0.015" pos="0.245 0.0 0.02" rgba="0.4 0.4 0.4 1"/>
     </body>
 
-    <!-- Target location - Moved closer to robot -->
-    <body name="target" pos="0.35 -0.2 0.005">
+    <!-- Graspable object (cylinder standing upright on table) -->
+    <body name="object" pos="0.7 0.1 0.30">
+      <freejoint name="object_freejoint"/>
+      <geom type="cylinder" size="0.02 0.04" material="cube_mat" mass="0.8" friction="1.5 0.05 0.001" condim="4"/>
+    </body>
+
+    <!-- Target location on table -->
+    <body name="target" pos="0.7 -0.1 0.265">
       <geom type="box" size="0.05 0.05 0.005" material="target_mat" contype="0" conaffinity="0"/>
     </body>
   </worldbody>

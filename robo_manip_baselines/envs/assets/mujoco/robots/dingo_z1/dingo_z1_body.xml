@@ -13,7 +13,6 @@
       </default>
     </default>
     
-    <!-- Z1 defaults -->
     <default class="z1">
       <joint damping="1" frictionloss="1"/>
       <general biastype="affine" gainprm="1000" biasprm="0 -1000 -100" forcerange="-30 30"/>
@@ -21,7 +20,10 @@
         <geom type="mesh" group="2" contype="0" conaffinity="0"/>
       </default>
       <default class="z1_collision">
-        <geom type="cylinder" group="3" mass="0" density="0"/>
+        <!-- Softer and stickier contact -->
+        <geom type="cylinder" group="3" mass="0" density="0" 
+              friction="2.0 0.05 0.001" condim="4" 
+              solref="0.02 1.5" solimp="0.9 0.95 0.001" priority="1"/>
         <default class="z1_gripper_stator_collision">
           <geom pos="0.051 0 0" type="mesh"/>
         </default>
@@ -168,12 +170,15 @@
                       <joint name="joint5" axis="0 0 1" range="-1.3439 1.3439"/>
                       <geom class="z1_visual" mesh="z1_Link05"/>
                       
-                      <body name="link06" pos="0.0492 0 0" gravcomp="1">
-                        <inertial pos="0.0241569 -0.00017355 -0.00143876" quat="0.998779 0.0457735 -0.00663717 0.0173548"
-                          mass="0.288758" diaginertia="0.00018333 0.000147464 0.000146786"/>
-                        <joint name="joint6" axis="1 0 0" range="-2.79253 2.79253"/>
-                        <geom class="z1_visual" mesh="z1_Link06"/>
-                        <geom size="0.0325 0.0255" pos="0.0255 0 0" quat="1 0 1 0" class="z1_collision"/>
+                        <body name="link06" pos="0.0492 0 0" gravcomp="1">
+                          <inertial pos="0.0241569 -0.00017355 -0.00143876" quat="0.998779 0.0457735 -0.00663717 0.0173548"
+                            mass="0.288758" diaginertia="0.00018333 0.000147464 0.000146786"/>
+                          <joint name="joint6" axis="1 0 0" range="-2.79253 2.79253"/>
+                          <geom class="z1_visual" mesh="z1_Link06"/>
+                          <geom size="0.0325 0.0255" pos="0.0255 0 0" quat="1 0 1 0" class="z1_collision"/>
+                          
+                          <!-- Wrist camera for close-up manipulation -->
+                          <camera name="wrist" pos="0.08 0 0.05" quat="0.5 0.5 0.5 0.5" fovy="60"/>
                         
                         <!-- Gripper Stator -->
                         <geom pos="0.051 0 0" type="mesh" mesh="z1_GripperStator" class="z1_visual"/>
@@ -233,7 +238,7 @@
     <general class="z1" name="motor4" joint="joint4" ctrlrange="-1.51844 1.51844"/>
     <general class="z1" name="motor5" joint="joint5" ctrlrange="-1.3439 1.3439"/>
     <general class="z1" name="motor6" joint="joint6" ctrlrange="-2.79253 2.79253"/>
-    <general class="z1" name="motorGripper" joint="jointGripper" ctrlrange="-1.51844 0"/>
+    <general class="z1" name="motorGripper" joint="jointGripper" ctrlrange="-1.51844 0" gainprm="200" biasprm="0 -200 -20"/>
   </actuator>
 
   <sensor>

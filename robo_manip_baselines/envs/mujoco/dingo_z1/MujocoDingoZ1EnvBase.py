@@ -36,28 +36,6 @@ class MujocoDingoZ1EnvBase(MujocoEnvBase):
         }
     )
 
-    # Higher resolution for offscreen cameras (640x640) for better recording quality
-    OFFSCREEN_RES = 640
-
-    def setup_camera(self):
-        """Override: use 640x640 instead of 640x480 for offscreen cameras."""
-        self.cameras = {}
-        for camera_id in range(self.model.ncam):
-            camera = {}
-            camera_name = mujoco.mj_id2name(
-                self.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id
-            )
-            camera["name"] = camera_name
-            camera["id"] = camera_id
-            camera["viewer"] = OffScreenViewer(
-                self.model, self.data,
-                width=self.OFFSCREEN_RES, height=self.OFFSCREEN_RES,
-            )
-            self.cameras[camera_name.replace("/", "_")] = camera
-
-        self.mujoco_renderer._viewers["dummy"] = None
-        self._first_render = True
-        self._step_count = 0
 
     def setup_robot(self, init_qpos):
         self.init_qpos[: len(init_qpos)] = init_qpos
@@ -119,6 +97,9 @@ class MujocoDingoZ1EnvBase(MujocoEnvBase):
     def get_input_device_kwargs(self, input_device_name):
         if input_device_name == "spacemouse":
             return {0: {"gripper_scale": 0.05}, 1: {}}
+        elif input_device_name == "keyboard":
+            # Slower movement for precise grasping, gentle gripper
+            return {0: {"pos_scale": 5e-3, "gripper_scale": 0.05}}
         else:
             return {}
 
@@ -170,32 +151,26 @@ class MujocoDingoZ1EnvBase(MujocoEnvBase):
         
         obs = self._get_obs()
         reward = self._get_reward()
-        
-        # Performance: Don't render images on every physical step.
-        # We delegate the actual rendering to a separate explicit call or when it's requested by the human viewer loop
+        # Fast path: skip offscreen camera rendering to keep big window responsive
         info = self._get_info_fast()
-        
-        # Limit human rendering frequency
-        self._step_count += 1
-        if self.render_mode == "human" and self._step_count % 3 == 0:
-            self.render()
             
+        if self.render_mode == "human":
+            self.render()
+
         return obs, reward, False, False, info
 
-    def get_images(self):
-        """Dedicated method to render and get actual images on demand."""
-        return super()._get_info()
-
     def _get_info_fast(self):
-        """Optimized info gathering: skip heavy image rendering on every step."""
+        """Return info without rendering offscreen cameras. Keeps big window smooth."""
         info = {}
         if len(self.camera_names) == 0:
             return info
         info["rgb_images"] = {}
         info["depth_images"] = {}
-        # We return empty dicts/placeholders during regular steps.
-        # Teleop will call `get_images()` exclusively when recording/drawing.
         return info
+
+    def get_images(self):
+        """Render all offscreen cameras on demand. Called by Teleop when recording/drawing."""
+        return self._get_info()
 
     def _get_obs(self):
         # Z1 arm joint names

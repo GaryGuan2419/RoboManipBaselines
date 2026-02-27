@@ -474,29 +474,26 @@ class TeleopBase(OperationDataMixin, ABC):
                 ]
             )
 
-            # Whether we need images this iteration (for recording or drawing)
-            need_images_for_recording = self.phase_manager.is_phases(["TeleopPhase", "ReplayPhase"])
-            
             self.obs, self.reward, _, _, self.info = self.env.step(action)
             
             self._loop_count += 1
-            need_images_for_drawing = (self._loop_count % 5 == 0)
-
-            # Lazy render images only when strictly required by recording or drawing
-            if need_images_for_recording or need_images_for_drawing:
+            
+            # Throttle all offscreen rendering to every 5 steps
+            if self._loop_count % 5 == 0:
+                # Fetch images from offscreen cameras
                 if hasattr(self.env.unwrapped, "get_images"):
-                     # Mix the fully rendered images into self.info
-                     images_info = self.env.unwrapped.get_images()
-                     self.info.update(images_info)
+                    images_info = self.env.unwrapped.get_images()
+                    self.info.update(images_info)
 
-            if need_images_for_recording:
-                self.record_data()
+                # Record data (with images)
+                if self.phase_manager.is_phases(["TeleopPhase", "ReplayPhase"]):
+                    self.record_data()
 
-            if need_images_for_drawing:
+                # Update small windows
                 try:
                     self.draw_image()
                 except Exception as e:
-                     print(f"Warning: Failed to draw image: {e}")
+                    print(f"Warning: Failed to draw image: {e}")
 
             if self.args.plot_pointcloud:
                 self.draw_pointcloud()

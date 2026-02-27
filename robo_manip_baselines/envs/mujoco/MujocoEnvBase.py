@@ -9,7 +9,7 @@ from robo_manip_baselines.common import ArmConfig, DataKey, EnvDataMixin
 
 
 class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
-    sim_timestep = 0.004
+    sim_timestep = 0.002
     frame_skip = 8
     metadata = {
         "render_modes": [
@@ -59,7 +59,7 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
             camera["name"] = camera_name
             camera["id"] = camera_id
             camera["viewer"] = OffScreenViewer(
-                self.model, self.data, width=640, height=480
+                self.model, self.data, width=160, height=120
             )
             # Because "/" are not allowed in HDF5 keys, replace "/" with "_" in dictionary keys
             self.cameras[camera_name.replace("/", "_")] = camera
@@ -118,6 +118,7 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
             depth_image = camera["viewer"].render(
                 render_mode="depth_array", camera_id=camera["id"]
             )
+            
             # See https://github.com/google-deepmind/mujoco/blob/631b16e7ad192df936195658fe79f2ada85f755c/python/mujoco/renderer.py#L170-L178
             extent = self.model.stat.extent
             near = self.model.vis.map.znear * extent

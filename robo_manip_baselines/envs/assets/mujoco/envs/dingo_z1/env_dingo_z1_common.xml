@@ -1,6 +1,6 @@
 <mujoco model="dingo_z1_common">
   <compiler meshdir="../../robots/dingo_z1/meshes" texturedir="../../assets/textures" angle="radian"/>
-  <option timestep="0.004" integrator="implicitfast"/>
+  <option timestep="0.002" integrator="implicitfast" cone="elliptic" impratio="10"/>
   <size memory="2M"/>
   <statistic extent="2.5"/>
 
@@ -8,7 +8,7 @@
     <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0.0 0.0 0.0"/>
     <rgba haze="1.0 1.0 1.0 1.0"/>
     <global azimuth="90" elevation="-20"/>
-    <quality shadowsize="8192"/>
+    <quality shadowsize="1024"/>
   </visual>
 
   <asset>

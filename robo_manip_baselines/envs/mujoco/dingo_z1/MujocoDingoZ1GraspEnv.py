@@ -29,11 +29,12 @@ class MujocoDingoZ1GraspEnv(MujocoDingoZ1EnvBase):
         # Define position offsets for world randomization
         self.object_pos_offsets = np.array(
             [
-                [0.0, -0.1, 0.0],
+                [-0.05, -0.05, 0.0],
+                [-0.05, 0.0, 0.0],
+                [-0.05, 0.05, 0.0],
                 [0.0, -0.05, 0.0],
                 [0.0, 0.0, 0.0],
                 [0.0, 0.05, 0.0],
-                [0.0, 0.1, 0.0],
                 [0.05, -0.05, 0.0],
                 [0.05, 0.0, 0.0],
                 [0.05, 0.05, 0.0],
@@ -59,7 +60,7 @@ class MujocoDingoZ1GraspEnv(MujocoDingoZ1EnvBase):
         gripper_to_object_dist = np.linalg.norm(object_pos - gripper_pos)
         gripper_closed = gripper_joint_pos < -0.5  # Gripper range: -1.51844 to 0
         
-        if gripper_to_object_dist < 0.08 and gripper_closed:
+        if gripper_to_object_dist < 0.1 and gripper_closed:
             reward += 0.5
         
         # Check if object is at target location
