@@ -112,6 +112,10 @@ register(
     id="robo_manip_baselines/MujocoDingoZ1GraspEnv-v0",
     entry_point="robo_manip_baselines.envs.mujoco:MujocoDingoZ1GraspEnv",
 )
+register(
+    id="robo_manip_baselines/MujocoDualDingoZ1HandoverEnv-v0",
+    entry_point="robo_manip_baselines.envs.mujoco:MujocoDualDingoZ1HandoverEnv",
+)
 
 
 # Isaac

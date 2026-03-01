@@ -478,8 +478,8 @@ class TeleopBase(OperationDataMixin, ABC):
             
             self._loop_count += 1
             
-            # Throttle all offscreen rendering to every 5 steps
-            if self._loop_count % 5 == 0:
+            # Throttle all offscreen rendering to every 30 steps (perf vs visual)
+            if self._loop_count % 30 == 0:
                 # Fetch images from offscreen cameras
                 if hasattr(self.env.unwrapped, "get_images"):
                     images_info = self.env.unwrapped.get_images()

@@ -103,7 +103,8 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
     def _get_info(self):
         info = {}
 
-        if len(self.camera_names) == 0:
+        # If no cameras or specifically in headless mode without render_mode, skip rendering to save time/avoid hangs
+        if len(self.camera_names) == 0 or self.render_mode is None:
             return info
 
         # Set camera images
@@ -168,6 +169,13 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
     def close(self):
         for camera in self.cameras.values():
             camera["viewer"].close()
+        
+        # Prevent AttributeError if renderer/viewer wasn't initialized in headless mode
+        if hasattr(self, "mujoco_renderer") and self.mujoco_renderer is not None:
+            if hasattr(self.mujoco_renderer, "viewer") and self.mujoco_renderer.viewer is None:
+                # If viewer is None, calling MujocoEnv.close might fail in some Gymnasium versions
+                return
+        
         MujocoEnv.close(self)
 
     def get_joint_pos_from_obs(self, obs):

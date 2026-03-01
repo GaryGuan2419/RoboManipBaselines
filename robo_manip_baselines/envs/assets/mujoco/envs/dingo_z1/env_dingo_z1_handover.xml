@@ -1,0 +1,478 @@
+<mujoco model="dingo_z1_handover">
+  <!-- ============================================================
+       Dual DingoZ1 Handover Scene
+       Two Dingo+Z1 robots facing each other, with a shared handover zone.
+       Robot_A starts on the left, Robot_B on the right.
+       
+       Action space: 20-dim (10 per robot: 3 mobile + 6 arm + 1 gripper)
+       
+       [NOTE] To lock mobile bases, uncomment the <weld> constraints at the bottom.
+       ============================================================ -->
+
+  <include file="./env_dingo_z1_common.xml"/>
+
+  <asset>
+    <!-- Object materials -->
+    <texture name="cube_tex" type="cube" file="general/metal2.png"/>
+    <material name="cube_mat" texture="cube_tex" rgba="0.2 0.6 0.9 1.0" specular="1.0" shininess="1.0"/>
+    <material name="target_mat" rgba="0.9 0.2 0.2 0.5" specular="0.3" shininess="0.3"/>
+    <material name="handover_mat" rgba="0.2 0.9 0.2 0.3" specular="0.3" shininess="0.3"/>
+    <material name="table_wood" rgba="0.6 0.4 0.2 1.0" specular="0.3" shininess="0.5"/>
+  </asset>
+
+  <!-- ============================================================
+       Robot A (Left side): DingoZ1 facing +X direction
+       All names prefixed with "robot_a/" to avoid conflicts.
+       ============================================================ -->
+  <default>
+    <!-- Robot A defaults (same as single robot) -->
+    <default class="robot_a_dingo">
+      <joint damping="0.1" frictionloss="0.05"/>
+      <geom friction="1.0 0.005 0.0001"/>
+      <default class="robot_a_dingo_visual">
+        <geom type="mesh" group="2" contype="0" conaffinity="0"/>
+      </default>
+      <default class="robot_a_dingo_collision">
+        <geom group="3"/>
+      </default>
+    </default>
+    <default class="robot_a_z1">
+      <joint damping="1" frictionloss="1"/>
+      <general biastype="affine" gainprm="1000" biasprm="0 -1000 -100" forcerange="-30 30"/>
+      <default class="robot_a_z1_visual">
+        <geom type="mesh" group="2" contype="0" conaffinity="0"/>
+      </default>
+      <default class="robot_a_z1_collision">
+        <geom type="cylinder" group="3" mass="0" density="0" 
+              friction="2.0 0.05 0.001" condim="4" 
+              solref="0.02 1.5" solimp="0.9 0.95 0.001" priority="1"/>
+        <default class="robot_a_z1_gripper_stator_collision">
+          <geom pos="0.051 0 0" type="mesh"/>
+        </default>
+        <default class="robot_a_z1_gripper_stator_pad_collision_1">
+          <geom type="box" size="0.014 0.015 0.004" pos="0.186 -0.015 -0.0125"/>
+        </default>
+        <default class="robot_a_z1_gripper_stator_pad_collision_2">
+          <geom type="box" size="0.014 0.015 0.004" pos="0.186 0.015 -0.0125"/>
+        </default>
+        <default class="robot_a_z1_gripper_mover_collision">
+          <geom type="mesh"/>
+        </default>
+        <default class="robot_a_z1_gripper_mover_pad_collision_1">
+          <geom type="box" size="0.014 0.015 0.004" pos="0.086 -0.015 -0.0055"/>
+        </default>
+        <default class="robot_a_z1_gripper_mover_pad_collision_2">
+          <geom type="box" size="0.014 0.015 0.004" pos="0.086 0.015 -0.0055"/>
+        </default>
+      </default>
+    </default>
+
+    <!-- Robot B defaults (same parameters, different class names) -->
+    <default class="robot_b_dingo">
+      <joint damping="0.1" frictionloss="0.05"/>
+      <geom friction="1.0 0.005 0.0001"/>
+      <default class="robot_b_dingo_visual">
+        <geom type="mesh" group="2" contype="0" conaffinity="0"/>
+      </default>
+      <default class="robot_b_dingo_collision">
+        <geom group="3"/>
+      </default>
+    </default>
+    <default class="robot_b_z1">
+      <joint damping="1" frictionloss="1"/>
+      <general biastype="affine" gainprm="1000" biasprm="0 -1000 -100" forcerange="-30 30"/>
+      <default class="robot_b_z1_visual">
+        <geom type="mesh" group="2" contype="0" conaffinity="0"/>
+      </default>
+      <default class="robot_b_z1_collision">
+        <geom type="cylinder" group="3" mass="0" density="0" 
+              friction="2.0 0.05 0.001" condim="4" 
+              solref="0.02 1.5" solimp="0.9 0.95 0.001" priority="1"/>
+        <default class="robot_b_z1_gripper_stator_collision">
+          <geom pos="0.051 0 0" type="mesh"/>
+        </default>
+        <default class="robot_b_z1_gripper_stator_pad_collision_1">
+          <geom type="box" size="0.014 0.015 0.004" pos="0.186 -0.015 -0.0125"/>
+        </default>
+        <default class="robot_b_z1_gripper_stator_pad_collision_2">
+          <geom type="box" size="0.014 0.015 0.004" pos="0.186 0.015 -0.0125"/>
+        </default>
+        <default class="robot_b_z1_gripper_mover_collision">
+          <geom type="mesh"/>
+        </default>
+        <default class="robot_b_z1_gripper_mover_pad_collision_1">
+          <geom type="box" size="0.014 0.015 0.004" pos="0.086 -0.015 -0.0055"/>
+        </default>
+        <default class="robot_b_z1_gripper_mover_pad_collision_2">
+          <geom type="box" size="0.014 0.015 0.004" pos="0.086 0.015 -0.0055"/>
+        </default>
+      </default>
+    </default>
+  </default>
+
+  <!-- Shared meshes (loaded once, referenced by both robots) -->
+  <asset>
+    <mesh file="diff_chassis_collision.stl"/>
+    <mesh file="wheel.stl"/>
+    <mesh file="z1_Link00.stl"/>
+    <mesh file="z1_Link01.stl"/>
+    <mesh file="z1_Link02.stl"/>
+    <mesh file="z1_Link03.stl"/>
+    <mesh file="z1_Link04.stl"/>
+    <mesh file="z1_Link05.stl"/>
+    <mesh file="z1_Link06.stl"/>
+    <mesh file="z1_GripperStator.stl"/>
+    <mesh file="z1_GripperStator_col_1.stl"/>
+    <mesh file="z1_GripperStator_col_2.stl"/>
+    <mesh file="z1_GripperStator_col_3.stl"/>
+    <mesh file="z1_GripperStator_col_4.stl"/>
+    <mesh file="z1_GripperStator_col_5.stl"/>
+    <mesh file="z1_GripperStator_col_6.stl"/>
+    <mesh file="z1_GripperMover.stl"/>
+    <mesh file="z1_GripperMover_col_1.stl"/>
+    <mesh file="z1_GripperMover_col_2.stl"/>
+    <mesh file="z1_GripperMover_col_3.stl"/>
+    <mesh file="z1_GripperMover_col_4.stl"/>
+    <mesh file="z1_GripperMover_col_5.stl"/>
+  </asset>
+
+  <worldbody>
+    <!-- Cameras: overhead view for full scene -->
+    <camera name="overhead" pos="0.0 0.0 3.0" euler="0 0 0" fovy="80"/>
+    <camera name="front" pos="0.0 -3.0 1.5" mode="targetbody" target="handover_zone" fovy="70"/>
+
+    <light pos="0 0 3.0" dir="0 0 -1" directional="true" diffuse="0.5 0.5 0.5" castshadow="false"/>
+    <light pos="1.0 0 2.0" dir="-0.3 0 -1" directional="false" diffuse="0.2 0.2 0.2"/>
+
+    <geom name="floor" size="0 0 0.05" type="plane" material="floor" pos="0 0 0.0" contype="3" conaffinity="3"/>
+
+    <!-- Walls -->
+    <geom name="wall1" type="box" size="10 10 0.01" pos="10 0 10" zaxis="1 0 0" material="wall" contype="3" conaffinity="3"/>
+    <geom name="wall2" type="box" size="10 10 0.01" pos="-10 0 10" zaxis="1 0 0" material="wall" contype="3" conaffinity="3"/>
+    <geom name="wall3" type="box" size="10 10 0.01" pos="0 10 10" zaxis="0 1 0" material="wall" contype="3" conaffinity="3"/>
+    <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall" contype="3" conaffinity="3"/>
+
+    <!-- ============================================================
+         Table A (Source): Leftmost table
+         Located at x=-0.9  (0.45m from Robot A)
+         ============================================================ -->
+    <body name="table_a" pos="-1.1 0.0 0.35">
+      <geom type="box" size="0.2 0.25 0.01" material="table_wood" friction="2.0 0.1 0.001" mass="10" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="0.17 0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="-0.17 0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="0.17 -0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="-0.17 -0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+    </body>
+
+    <!-- ============================================================
+         Table C (Handover): Center table
+         Located at x=0.0  (0.45m from both robots)
+         ============================================================ -->
+    <body name="table_c" pos="0.0 0.0 0.35">
+      <geom type="box" size="0.2 0.25 0.01" material="table_wood" friction="2.0 0.1 0.001" mass="10" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="0.17 0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="-0.17 0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="0.17 -0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="-0.17 -0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+      
+      <!-- Handover visual zone on Table C -->
+      <body name="handover_zone" pos="0.0 0.0 0.015">
+        <geom type="box" size="0.15 0.15 0.005" material="handover_mat" contype="0" conaffinity="0"/>
+      </body>
+    </body>
+
+    <!-- ============================================================
+         Table B (Target): Rightmost table
+         Located at x=+0.9  (0.45m from Robot B)
+         ============================================================ -->
+    <body name="table_b" pos="1.1 0.0 0.35">
+      <geom type="box" size="0.2 0.25 0.01" material="table_wood" friction="2.0 0.1 0.001" mass="10" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="0.17 0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="-0.17 0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="0.17 -0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+      <geom type="cylinder" size="0.02 0.35" pos="-0.17 -0.22 -0.35" rgba="0.3 0.3 0.3 1" contype="3" conaffinity="3"/>
+    </body>
+
+    <!-- Target placement area on Table B -->
+    <body name="target" pos="1.1 0.0 0.365">
+      <geom type="box" size="0.05 0.05 0.005" material="target_mat" contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- ============================================================
+         Robot A: Between Table A and Table C, facing +X (toward Table C)
+         Position: x=-0.45
+         ============================================================ -->
+    <body name="robot_a/base_link" pos="-0.55 0 0.015" quat="0.7071 0 0 0.7071" childclass="robot_a_dingo">
+      <freejoint name="robot_a/base_freejoint"/>
+      <body name="robot_a/chassis_link" pos="0 0 0">
+        <inertial pos="0 0 0" mass="10.0" diaginertia="0.2216 0.2458 0.4474"/>
+        <geom class="robot_a_dingo_visual" mesh="diff_chassis_collision"/>
+        <geom class="robot_a_dingo_collision" type="mesh" mesh="diff_chassis_collision"/>
+
+        <!-- Left wheel -->
+        <body name="robot_a/left_wheel_link" pos="0.0989838 0.118001 0.0345">
+          <inertial pos="0 0 0" mass="0.111" diaginertia="0.0003234 0.0003234 0.00049015"/>
+          <joint name="robot_a/left_wheel" type="hinge" axis="0 1 0" damping="0.01" frictionloss="0.01"/>
+          <geom class="robot_a_dingo_visual" mesh="wheel"/>
+          <geom class="robot_a_dingo_collision" type="cylinder" size="0.049 0.01016" quat="0.7071068 0.7071068 0 0"/>
+        </body>
+        <!-- Right wheel -->
+        <body name="robot_a/right_wheel_link" pos="0.0989838 -0.118001 0.0345">
+          <inertial pos="0 0 0" mass="0.111" diaginertia="0.0003234 0.0003234 0.00049015"/>
+          <joint name="robot_a/right_wheel" type="hinge" axis="0 1 0" damping="0.01" frictionloss="0.01"/>
+          <geom class="robot_a_dingo_visual" mesh="wheel"/>
+          <geom class="robot_a_dingo_collision" type="cylinder" size="0.049 0.01016" quat="0.7071068 0.7071068 0 0"/>
+        </body>
+        <!-- Rear caster -->
+        <body name="robot_a/rear_caster" pos="-0.244 0 0.01">
+          <inertial pos="0 0 0" mass="0.1" diaginertia="0.001 0.001 0.001"/>
+          <geom type="sphere" size="0.01" class="robot_a_dingo_collision" friction="0.2 0.005 0.0001"/>
+        </body>
+
+        <!-- Z1 Arm on Robot A -->
+        <body name="robot_a/z1_mount" pos="0 0 0.095" quat="1 0 0 0" childclass="robot_a_z1">
+          <body name="robot_a/link00">
+            <inertial pos="-0.00334984 -0.00013615 0.0249584" quat="-0.00692194 0.682592 0.00133293 0.730766" mass="0.472475"
+              diaginertia="0.000531375 0.000415207 0.000378658"/>
+            <geom class="robot_a_z1_visual" mesh="z1_Link00"/>
+            <geom size="0.0325 0.0255" pos="0 0 0.0255" class="robot_a_z1_collision"/>
+            <body name="robot_a/link01" pos="0 0 0.0585" gravcomp="1">
+              <inertial pos="2.47e-06 -0.00025198 0.0231717" quat="0.708578 0.705633 0.000281462 -0.000355927" mass="0.673326"
+                diaginertia="0.00128328 0.000839362 0.000719308"/>
+              <joint name="robot_a/joint1" axis="0 0 1" range="-2.61799 2.61799"/>
+              <geom class="robot_a_z1_visual" mesh="z1_Link01"/>
+              <body name="robot_a/link02" pos="0 0 0.045" gravcomp="1">
+                <inertial pos="-0.110126 0.00240029 0.00158266" quat="0.00748058 0.707092 -0.0114473 0.70699" mass="1.19132"
+                  diaginertia="0.0246612 0.0243113 0.00100468"/>
+                <joint name="robot_a/joint2" axis="0 1 0" range="0 2.96706" damping="2"/>
+                <geom class="robot_a_z1_visual" mesh="z1_Link02"/>
+                <geom size="0.0325 0.051" quat="1 1 0 0" class="robot_a_z1_collision"/>
+                <geom size="0.0225 0.1175" pos="-0.1625 0 0" quat="1 0 1 0" class="robot_a_z1_collision"/>
+                <geom size="0.0325 0.0255" pos="-0.35 0 0" quat="1 1 0 0" class="robot_a_z1_collision"/>
+                <body name="robot_a/link03" pos="-0.35 0 0" gravcomp="1">
+                  <inertial pos="0.106092 -0.00541815 0.0347638" quat="0.540557 0.443575 0.426319 0.573839" mass="0.839409"
+                    diaginertia="0.00954365 0.00938711 0.000558432"/>
+                  <joint name="robot_a/joint3" axis="0 1 0" range="-2.87979 0"/>
+                  <geom class="robot_a_z1_visual" mesh="z1_Link03"/>
+                  <geom size="0.02 0.058" pos="0.128 0 0.055" quat="1 0 1 0" class="robot_a_z1_collision"/>
+                  <geom size="0.0325 0.0295" pos="0.2205 0 0.055" quat="0.5 -0.5 0.5 0.5" class="robot_a_z1_collision"/>
+                  <body name="robot_a/link04" pos="0.218 0 0.057" gravcomp="1">
+                    <inertial pos="0.0436668 0.00364738 -0.00170192" quat="0.0390835 0.726445 -0.0526787 0.684087"
+                      mass="0.564046" diaginertia="0.000981656 0.00094053 0.000302655"/>
+                    <joint name="robot_a/joint4" axis="0 1 0" range="-1.51844 1.51844"/>
+                    <geom class="robot_a_z1_visual" mesh="z1_Link04"/>
+                    <geom size="0.0325 0.0335" pos="0.072 0 0" class="robot_a_z1_collision"/>
+                    <body name="robot_a/link05" pos="0.07 0 0" gravcomp="1">
+                      <inertial pos="0.0312153 0 0.00646316" quat="0.462205 0.535209 0.53785 0.45895" mass="0.389385"
+                        diaginertia="0.000558961 0.000547317 0.000167332"/>
+                      <joint name="robot_a/joint5" axis="0 0 1" range="-1.3439 1.3439"/>
+                      <geom class="robot_a_z1_visual" mesh="z1_Link05"/>
+                      <body name="robot_a/link06" pos="0.0492 0 0" gravcomp="1">
+                        <inertial pos="0.0241569 -0.00017355 -0.00143876" quat="0.998779 0.0457735 -0.00663717 0.0173548"
+                          mass="0.288758" diaginertia="0.00018333 0.000147464 0.000146786"/>
+                        <joint name="robot_a/joint6" axis="1 0 0" range="-2.79253 2.79253"/>
+                        <geom class="robot_a_z1_visual" mesh="z1_Link06"/>
+                        <geom size="0.0325 0.0255" pos="0.0255 0 0" quat="1 0 1 0" class="robot_a_z1_collision"/>
+                        <camera name="robot_a/wrist" pos="0.08 0 0.05" quat="0.5 0.5 0.5 0.5" fovy="60"/>
+                        <!-- Gripper Stator -->
+                        <geom pos="0.051 0 0" type="mesh" mesh="z1_GripperStator" class="robot_a_z1_visual"/>
+                        <geom class="robot_a_z1_gripper_stator_collision" mesh="z1_GripperStator_col_1"/>
+                        <geom class="robot_a_z1_gripper_stator_collision" mesh="z1_GripperStator_col_2"/>
+                        <geom class="robot_a_z1_gripper_stator_collision" mesh="z1_GripperStator_col_3"/>
+                        <geom class="robot_a_z1_gripper_stator_collision" mesh="z1_GripperStator_col_4"/>
+                        <geom class="robot_a_z1_gripper_stator_collision" mesh="z1_GripperStator_col_5"/>
+                        <geom class="robot_a_z1_gripper_stator_collision" mesh="z1_GripperStator_col_6"/>
+                        <geom class="robot_a_z1_gripper_stator_pad_collision_1"/>
+                        <geom class="robot_a_z1_gripper_stator_pad_collision_2"/>
+                        <!-- Gripper Mover -->
+                        <body name="robot_a/gripperMover" pos="0.1 0 0" gravcomp="1">
+                          <inertial pos="0.0132063 0.00476708 0.00380534" quat="0.0631093 0.669067 -0.0615783 0.737953"
+                            mass="0.276213" diaginertia="0.000359044 0.000270888 0.000172378"/>
+                          <joint name="robot_a/jointGripper" axis="0 1 0" range="-1.51844 0"/>
+                          <geom type="mesh" mesh="z1_GripperMover" class="robot_a_z1_visual"/>
+                          <geom class="robot_a_z1_gripper_mover_collision" mesh="z1_GripperMover_col_1"/>
+                          <geom class="robot_a_z1_gripper_mover_collision" mesh="z1_GripperMover_col_2"/>
+                          <geom class="robot_a_z1_gripper_mover_collision" mesh="z1_GripperMover_col_3"/>
+                          <geom class="robot_a_z1_gripper_mover_collision" mesh="z1_GripperMover_col_4"/>
+                          <geom class="robot_a_z1_gripper_mover_collision" mesh="z1_GripperMover_col_5"/>
+                          <geom class="robot_a_z1_gripper_mover_pad_collision_1"/>
+                          <geom class="robot_a_z1_gripper_mover_pad_collision_2"/>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+        <!-- IMU -->
+        <body name="robot_a/imu_link" pos="0 0 0">
+          <inertial pos="0 0 0" mass="0.001" diaginertia="1e-09 1e-09 1e-09"/>
+        </body>
+      </body>
+    </body>
+
+    <!-- ============================================================
+         Robot B: Between Table C and Table B, facing -X (toward Table C)
+         Position: x=+0.45, rotated 180 degrees around Z
+         quat="0 0 0 1" = 180 deg rotation around Z axis
+         ============================================================ -->
+    <body name="robot_b/base_link" pos="0.55 0 0.015" quat="0.7071 0 0 0.7071" childclass="robot_b_dingo">
+      <freejoint name="robot_b/base_freejoint"/>
+      <body name="robot_b/chassis_link" pos="0 0 0">
+        <inertial pos="0 0 0" mass="10.0" diaginertia="0.2216 0.2458 0.4474"/>
+        <geom class="robot_b_dingo_visual" mesh="diff_chassis_collision"/>
+        <geom class="robot_b_dingo_collision" type="mesh" mesh="diff_chassis_collision"/>
+
+        <!-- Left wheel -->
+        <body name="robot_b/left_wheel_link" pos="0.0989838 0.118001 0.0345">
+          <inertial pos="0 0 0" mass="0.111" diaginertia="0.0003234 0.0003234 0.00049015"/>
+          <joint name="robot_b/left_wheel" type="hinge" axis="0 1 0" damping="0.01" frictionloss="0.01"/>
+          <geom class="robot_b_dingo_visual" mesh="wheel"/>
+          <geom class="robot_b_dingo_collision" type="cylinder" size="0.049 0.01016" quat="0.7071068 0.7071068 0 0"/>
+        </body>
+        <!-- Right wheel -->
+        <body name="robot_b/right_wheel_link" pos="0.0989838 -0.118001 0.0345">
+          <inertial pos="0 0 0" mass="0.111" diaginertia="0.0003234 0.0003234 0.00049015"/>
+          <joint name="robot_b/right_wheel" type="hinge" axis="0 1 0" damping="0.01" frictionloss="0.01"/>
+          <geom class="robot_b_dingo_visual" mesh="wheel"/>
+          <geom class="robot_b_dingo_collision" type="cylinder" size="0.049 0.01016" quat="0.7071068 0.7071068 0 0"/>
+        </body>
+        <!-- Rear caster -->
+        <body name="robot_b/rear_caster" pos="-0.244 0 0.01">
+          <inertial pos="0 0 0" mass="0.1" diaginertia="0.001 0.001 0.001"/>
+          <geom type="sphere" size="0.01" class="robot_b_dingo_collision" friction="0.2 0.005 0.0001"/>
+        </body>
+
+        <!-- Z1 Arm on Robot B -->
+        <body name="robot_b/z1_mount" pos="0 0 0.095" quat="1 0 0 0" childclass="robot_b_z1">
+          <body name="robot_b/link00">
+            <inertial pos="-0.00334984 -0.00013615 0.0249584" quat="-0.00692194 0.682592 0.00133293 0.730766" mass="0.472475"
+              diaginertia="0.000531375 0.000415207 0.000378658"/>
+            <geom class="robot_b_z1_visual" mesh="z1_Link00"/>
+            <geom size="0.0325 0.0255" pos="0 0 0.0255" class="robot_b_z1_collision"/>
+            <body name="robot_b/link01" pos="0 0 0.0585" gravcomp="1">
+              <inertial pos="2.47e-06 -0.00025198 0.0231717" quat="0.708578 0.705633 0.000281462 -0.000355927" mass="0.673326"
+                diaginertia="0.00128328 0.000839362 0.000719308"/>
+              <joint name="robot_b/joint1" axis="0 0 1" range="-2.61799 2.61799"/>
+              <geom class="robot_b_z1_visual" mesh="z1_Link01"/>
+              <body name="robot_b/link02" pos="0 0 0.045" gravcomp="1">
+                <inertial pos="-0.110126 0.00240029 0.00158266" quat="0.00748058 0.707092 -0.0114473 0.70699" mass="1.19132"
+                  diaginertia="0.0246612 0.0243113 0.00100468"/>
+                <joint name="robot_b/joint2" axis="0 1 0" range="0 2.96706" damping="2"/>
+                <geom class="robot_b_z1_visual" mesh="z1_Link02"/>
+                <geom size="0.0325 0.051" quat="1 1 0 0" class="robot_b_z1_collision"/>
+                <geom size="0.0225 0.1175" pos="-0.1625 0 0" quat="1 0 1 0" class="robot_b_z1_collision"/>
+                <geom size="0.0325 0.0255" pos="-0.35 0 0" quat="1 1 0 0" class="robot_b_z1_collision"/>
+                <body name="robot_b/link03" pos="-0.35 0 0" gravcomp="1">
+                  <inertial pos="0.106092 -0.00541815 0.0347638" quat="0.540557 0.443575 0.426319 0.573839" mass="0.839409"
+                    diaginertia="0.00954365 0.00938711 0.000558432"/>
+                  <joint name="robot_b/joint3" axis="0 1 0" range="-2.87979 0"/>
+                  <geom class="robot_b_z1_visual" mesh="z1_Link03"/>
+                  <geom size="0.02 0.058" pos="0.128 0 0.055" quat="1 0 1 0" class="robot_b_z1_collision"/>
+                  <geom size="0.0325 0.0295" pos="0.2205 0 0.055" quat="0.5 -0.5 0.5 0.5" class="robot_b_z1_collision"/>
+                  <body name="robot_b/link04" pos="0.218 0 0.057" gravcomp="1">
+                    <inertial pos="0.0436668 0.00364738 -0.00170192" quat="0.0390835 0.726445 -0.0526787 0.684087"
+                      mass="0.564046" diaginertia="0.000981656 0.00094053 0.000302655"/>
+                    <joint name="robot_b/joint4" axis="0 1 0" range="-1.51844 1.51844"/>
+                    <geom class="robot_b_z1_visual" mesh="z1_Link04"/>
+                    <geom size="0.0325 0.0335" pos="0.072 0 0" class="robot_b_z1_collision"/>
+                    <body name="robot_b/link05" pos="0.07 0 0" gravcomp="1">
+                      <inertial pos="0.0312153 0 0.00646316" quat="0.462205 0.535209 0.53785 0.45895" mass="0.389385"
+                        diaginertia="0.000558961 0.000547317 0.000167332"/>
+                      <joint name="robot_b/joint5" axis="0 0 1" range="-1.3439 1.3439"/>
+                      <geom class="robot_b_z1_visual" mesh="z1_Link05"/>
+                      <body name="robot_b/link06" pos="0.0492 0 0" gravcomp="1">
+                        <inertial pos="0.0241569 -0.00017355 -0.00143876" quat="0.998779 0.0457735 -0.00663717 0.0173548"
+                          mass="0.288758" diaginertia="0.00018333 0.000147464 0.000146786"/>
+                        <joint name="robot_b/joint6" axis="1 0 0" range="-2.79253 2.79253"/>
+                        <geom class="robot_b_z1_visual" mesh="z1_Link06"/>
+                        <geom size="0.0325 0.0255" pos="0.0255 0 0" quat="1 0 1 0" class="robot_b_z1_collision"/>
+                        <camera name="robot_b/wrist" pos="0.08 0 0.05" quat="0.5 0.5 0.5 0.5" fovy="60"/>
+                        <!-- Gripper Stator -->
+                        <geom pos="0.051 0 0" type="mesh" mesh="z1_GripperStator" class="robot_b_z1_visual"/>
+                        <geom class="robot_b_z1_gripper_stator_collision" mesh="z1_GripperStator_col_1"/>
+                        <geom class="robot_b_z1_gripper_stator_collision" mesh="z1_GripperStator_col_2"/>
+                        <geom class="robot_b_z1_gripper_stator_collision" mesh="z1_GripperStator_col_3"/>
+                        <geom class="robot_b_z1_gripper_stator_collision" mesh="z1_GripperStator_col_4"/>
+                        <geom class="robot_b_z1_gripper_stator_collision" mesh="z1_GripperStator_col_5"/>
+                        <geom class="robot_b_z1_gripper_stator_collision" mesh="z1_GripperStator_col_6"/>
+                        <geom class="robot_b_z1_gripper_stator_pad_collision_1"/>
+                        <geom class="robot_b_z1_gripper_stator_pad_collision_2"/>
+                        <!-- Gripper Mover -->
+                        <body name="robot_b/gripperMover" pos="0.1 0 0" gravcomp="1">
+                          <inertial pos="0.0132063 0.00476708 0.00380534" quat="0.0631093 0.669067 -0.0615783 0.737953"
+                            mass="0.276213" diaginertia="0.000359044 0.000270888 0.000172378"/>
+                          <joint name="robot_b/jointGripper" axis="0 1 0" range="-1.51844 0"/>
+                          <geom type="mesh" mesh="z1_GripperMover" class="robot_b_z1_visual"/>
+                          <geom class="robot_b_z1_gripper_mover_collision" mesh="z1_GripperMover_col_1"/>
+                          <geom class="robot_b_z1_gripper_mover_collision" mesh="z1_GripperMover_col_2"/>
+                          <geom class="robot_b_z1_gripper_mover_collision" mesh="z1_GripperMover_col_3"/>
+                          <geom class="robot_b_z1_gripper_mover_collision" mesh="z1_GripperMover_col_4"/>
+                          <geom class="robot_b_z1_gripper_mover_collision" mesh="z1_GripperMover_col_5"/>
+                          <geom class="robot_b_z1_gripper_mover_pad_collision_1"/>
+                          <geom class="robot_b_z1_gripper_mover_pad_collision_2"/>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+        <!-- IMU -->
+        <body name="robot_b/imu_link" pos="0 0 0">
+          <inertial pos="0 0 0" mass="0.001" diaginertia="1e-09 1e-09 1e-09"/>
+        </body>
+      </body>
+    </body>
+
+    <!-- ============================================================
+         Graspable Object (starts on Table A)
+         IMPORTANT: Must be AFTER both robots in XML so that
+         robot qpos indices come first (robot_a: 0-15, robot_b: 16-31,
+         object: 32-38)
+         ============================================================ -->
+    <body name="object" pos="-1.1 0.0 0.40">
+      <freejoint name="object_freejoint"/>
+      <geom type="cylinder" size="0.02 0.04" material="cube_mat" mass="0.2" friction="5.0 0.1 0.001" condim="4"/>
+    </body>
+  </worldbody>
+
+  <!-- ============================================================
+       Actuators: prefixed for both robots
+       ============================================================ -->
+  <actuator>
+    <!-- Robot A actuators -->
+    <velocity name="robot_a/left_motor" joint="robot_a/left_wheel" kv="100" ctrlrange="-10 10" forcerange="-20 20"/>
+    <velocity name="robot_a/right_motor" joint="robot_a/right_wheel" kv="100" ctrlrange="-10 10" forcerange="-20 20"/>
+    <general class="robot_a_z1" name="robot_a/motor1" joint="robot_a/joint1" ctrlrange="-2.61799 2.61799"/>
+    <general class="robot_a_z1" name="robot_a/motor2" joint="robot_a/joint2" ctrlrange="0 2.96706" forcerange="-60 60" gainprm="1500" biasprm="0 -1500 -150"/>
+    <general class="robot_a_z1" name="robot_a/motor3" joint="robot_a/joint3" ctrlrange="-2.87979 0"/>
+    <general class="robot_a_z1" name="robot_a/motor4" joint="robot_a/joint4" ctrlrange="-1.51844 1.51844"/>
+    <general class="robot_a_z1" name="robot_a/motor5" joint="robot_a/joint5" ctrlrange="-1.3439 1.3439"/>
+    <general class="robot_a_z1" name="robot_a/motor6" joint="robot_a/joint6" ctrlrange="-2.79253 2.79253"/>
+    <general class="robot_a_z1" name="robot_a/motorGripper" joint="robot_a/jointGripper" ctrlrange="-1.51844 0" gainprm="200" biasprm="0 -200 -20"/>
+
+    <!-- Robot B actuators -->
+    <velocity name="robot_b/left_motor" joint="robot_b/left_wheel" kv="100" ctrlrange="-10 10" forcerange="-20 20"/>
+    <velocity name="robot_b/right_motor" joint="robot_b/right_wheel" kv="100" ctrlrange="-10 10" forcerange="-20 20"/>
+    <general class="robot_b_z1" name="robot_b/motor1" joint="robot_b/joint1" ctrlrange="-2.61799 2.61799"/>
+    <general class="robot_b_z1" name="robot_b/motor2" joint="robot_b/joint2" ctrlrange="0 2.96706" forcerange="-60 60" gainprm="1500" biasprm="0 -1500 -150"/>
+    <general class="robot_b_z1" name="robot_b/motor3" joint="robot_b/joint3" ctrlrange="-2.87979 0"/>
+    <general class="robot_b_z1" name="robot_b/motor4" joint="robot_b/joint4" ctrlrange="-1.51844 1.51844"/>
+    <general class="robot_b_z1" name="robot_b/motor5" joint="robot_b/joint5" ctrlrange="-1.3439 1.3439"/>
+    <general class="robot_b_z1" name="robot_b/motor6" joint="robot_b/joint6" ctrlrange="-2.79253 2.79253"/>
+    <general class="robot_b_z1" name="robot_b/motorGripper" joint="robot_b/jointGripper" ctrlrange="-1.51844 0" gainprm="200" biasprm="0 -200 -20"/>
+  </actuator>
+
+  <sensor>
+    <framepos name="robot_a/imu_pos" objtype="body" objname="robot_a/imu_link"/>
+    <framequat name="robot_a/imu_quat" objtype="body" objname="robot_a/imu_link"/>
+    <framepos name="robot_b/imu_pos" objtype="body" objname="robot_b/imu_link"/>
+    <framequat name="robot_b/imu_quat" objtype="body" objname="robot_b/imu_link"/>
+  </sensor>
+
+</mujoco>
