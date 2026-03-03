@@ -22,6 +22,7 @@ import os
 import sys
 import argparse
 import numpy as np
+import scipy.optimize
 import mujoco
 import gymnasium as gym
 
@@ -161,34 +162,36 @@ def auto_collect_main():
         # For grasping, the wrist is 0.16m away from the object.
         # If object is at -X, wrist is at +0.16, pointing -X
         
-        # ── Capture native kinematically-valid quaternions ──
+        # ── Setup dynamic kinematics solver for pre-grasping joint configurations ──
+        # Robot A Left (Points to -X / Table A)
         saved_qpos = data.qpos.copy()
         
-        # Robot A Left (Points to -X / Table A)
-        data.qpos[qpos_a] = [1.57, 1.0, -0.5, 0.0, -0.5, 0.0]
+        ja_pick_dyn = np.array([1.57, 1.0, -0.5, 0.0, -0.5, 0.0])
+        data.qpos[qpos_a] = ja_pick_dyn
         mujoco.mj_kinematics(model, data)
         qa_pick = np.zeros(4)
         mujoco.mju_mat2Quat(qa_pick, data.xmat[eef_a])
         
         # Robot A Right (Points to +X / Table C)
-        data.qpos[qpos_a] = [-1.57, 1.0, -0.5, 0.0, -0.5, 0.0]
+        ja_place_dyn = np.array([-1.57, 1.0, -0.5, 0.0, -0.5, 0.0])
+        data.qpos[qpos_a] = ja_place_dyn
         mujoco.mj_kinematics(model, data)
         qa_place = np.zeros(4)
         mujoco.mju_mat2Quat(qa_place, data.xmat[eef_a])
 
         # Robot B Left (Points to -X / Table C)
-        data.qpos[qpos_b] = [1.57, 1.0, -0.5, 0.0, -0.5, 0.0]
+        jb_pick_dyn = np.array([1.57, 1.0, -0.5, 0.0, -0.5, 0.0])
+        data.qpos[qpos_b] = jb_pick_dyn
         mujoco.mj_kinematics(model, data)
         qb_pick = np.zeros(4)
         mujoco.mju_mat2Quat(qb_pick, data.xmat[eef_b])
 
         # Robot B Right (Points to +X / Table B)
-        data.qpos[qpos_b] = [-1.57, 1.0, -0.5, 0.0, -0.5, 0.0]
+        jb_place_dyn = np.array([-1.57, 1.0, -0.5, 0.0, -0.5, 0.0])
+        data.qpos[qpos_b] = jb_place_dyn
         mujoco.mj_kinematics(model, data)
         qb_place = np.zeros(4)
         mujoco.mju_mat2Quat(qb_place, data.xmat[eef_b])
-        
-        # Restore state
         data.qpos[:] = saved_qpos
         mujoco.mj_kinematics(model, data)
 
@@ -210,6 +213,7 @@ def auto_collect_main():
 
         waypoints = [
             # ── Phase 1: Robot A picks from Table A ────────────────
+            {"n": "A joint pick",  "type": "joint", "ja": ja_pick_dyn, "ga": GRIPPER_OPEN, "tol": 0.05},
             {"n": "A hover obj",   "pa": [ax_hover_a, obj_pos[1], hover_z], "qa": qa_pick, "ga": GRIPPER_OPEN, "tol": 0.04},
             {"n": "A reach fwd",   "pa": [ax_grasp_a, obj_pos[1], grasp_z], "qa": qa_pick, "ga": GRIPPER_OPEN, "tol": 0.02},
             {"n": "A grasp",       "pa": [ax_grasp_a, obj_pos[1], grasp_z], "qa": qa_pick, "ga": GRIPPER_CLOSE, "tol": 0.04, "hold": 30},
@@ -217,13 +221,15 @@ def auto_collect_main():
             {"n": "CHECK_lifted",  "type": "check", "chk": "obj_lifted"},
 
             # ── Phase 2: Robot A places on Table C ──────────────────
+            {"n": "A joint place", "type": "joint", "ja": ja_place_dyn, "ga": GRIPPER_CLOSE, "tol": 0.05},
             {"n": "A to C hover",  "pa": [ax_hover_c, hz_pos[1], hover_z], "qa": qa_place, "ga": GRIPPER_CLOSE, "tol": 0.04},
             {"n": "A to C place",  "pa": [ax_place_c, hz_pos[1], grasp_z], "qa": qa_place, "ga": GRIPPER_CLOSE, "tol": 0.025},
             {"n": "A release",     "pa": [ax_place_c, hz_pos[1], grasp_z], "qa": qa_place, "ga": GRIPPER_OPEN, "tol": 0.04, "hold": 180},
             {"n": "A retreat",     "pa": [ax_hover_c, hz_pos[1], hover_z], "qa": qa_place, "ga": GRIPPER_OPEN, "tol": 0.03},
-            {"n": "A Home",        "pa": None, "qa": None, "ga": GRIPPER_OPEN, "tol": 0.05},
+            {"n": "A Home",        "type": "joint", "ja": HOME_JOINTS, "ga": GRIPPER_OPEN, "tol": 0.05},
 
             # ── Phase 3: Robot B picks from Table C ──────────────────
+            {"n": "B joint pick",  "type": "joint", "jb": jb_pick_dyn, "gb": GRIPPER_OPEN, "tol": 0.05},
             {"n": "B hover C",     "pb": [bx_hover_c, hz_pos[1], hover_z], "qb": qb_pick, "gb": GRIPPER_OPEN, "tol": 0.04},
             {"n": "B reach C",     "pb": [bx_grasp_c, hz_pos[1], grasp_z], "qb": qb_pick, "gb": GRIPPER_OPEN, "tol": 0.02},
             {"n": "B grasp",       "pb": [bx_grasp_c, hz_pos[1], grasp_z], "qb": qb_pick, "gb": GRIPPER_CLOSE, "tol": 0.04, "hold": 30},
@@ -231,16 +237,18 @@ def auto_collect_main():
             {"n": "CHECK_lifted_b","type": "check", "chk": "obj_lifted_b"},
 
             # ── Phase 4: Robot B places on Table B ───────────────────
+            {"n": "B joint place", "type": "joint", "jb": jb_place_dyn, "gb": GRIPPER_CLOSE, "tol": 0.05},
             {"n": "B to B hover",  "pb": [bx_hover_b, tgt_pos[1], hover_z], "qb": qb_place, "gb": GRIPPER_CLOSE, "tol": 0.04},
             {"n": "B to B place",  "pb": [bx_place_b, tgt_pos[1], grasp_z], "qb": qb_place, "gb": GRIPPER_CLOSE, "tol": 0.025},
             {"n": "B release",     "pb": [bx_place_b, tgt_pos[1], grasp_z], "qb": qb_place, "gb": GRIPPER_OPEN, "tol": 0.04, "hold": 180},
             {"n": "B retreat",     "pb": [bx_hover_b, tgt_pos[1], hover_z], "qb": qb_place, "gb": GRIPPER_OPEN, "tol": 0.03},
-            {"n": "B Home",        "pb": None, "qb": None, "gb": GRIPPER_OPEN, "tol": 0.05},
+            {"n": "B Home",        "type": "joint", "jb": HOME_JOINTS, "gb": GRIPPER_OPEN, "tol": 0.05},
+
             
             {"n": "CHECK_placed",  "type": "check", "chk": "obj_placed"},
         ]
 
-        max_steps = 1800
+        max_steps = 300
         wp_i, hold_cnt, step_cnt = 0, 0, 0
         failed = False
 
@@ -268,28 +276,44 @@ def auto_collect_main():
                 continue
 
             # ── IK step ──
-            pa_target = np.array(wp.get("pa")) if wp.get("pa") is not None else None
-            qa_target = wp.get("qa")
-            pb_target = np.array(wp.get("pb")) if wp.get("pb") is not None else None
-            qb_target = wp.get("qb")
-
-            if pa_target is not None and qa_target is not None:
-                dq_a = pos_ori_ik_step(model, data, pa_target, qa_target, eef_a, dof_a)
-                cmd_a = cmd_a + dq_a * 1.5
-                actual_a = data.qpos[qpos_a]
-                cmd_a = np.clip(cmd_a, actual_a - 0.4, actual_a + 0.4)
+            if wp.get("type") == "joint":
+                # Pure joint space interpolation to avoid any Cartesian deadlock
+                ja_target = wp.get("ja", cmd_a)
+                jb_target = wp.get("jb", cmd_b)
+                
+                # Step size per iteration
+                step_size = 0.05
+                
+                cmd_a = cmd_a + np.clip(ja_target - cmd_a, -step_size, step_size)
                 cmd_a = clamp_joints(cmd_a, model, act_a)
-            else:
-                cmd_a = cmd_a + np.clip(HOME_JOINTS - cmd_a, -0.05, 0.05)
-
-            if pb_target is not None and qb_target is not None:
-                dq_b = pos_ori_ik_step(model, data, pb_target, qb_target, eef_b, dof_b)
-                cmd_b = cmd_b + dq_b * 1.5
-                actual_b = data.qpos[qpos_b]
-                cmd_b = np.clip(cmd_b, actual_b - 0.4, actual_b + 0.4)
+                
+                cmd_b = cmd_b + np.clip(jb_target - cmd_b, -step_size, step_size)
                 cmd_b = clamp_joints(cmd_b, model, act_b)
+                
             else:
-                cmd_b = cmd_b + np.clip(HOME_JOINTS - cmd_b, -0.05, 0.05)
+                # Normal Jacobian IK phase for approaching limits
+                pa_target = np.array(wp.get("pa")) if wp.get("pa") is not None else None
+                qa_target = wp.get("qa")
+                pb_target = np.array(wp.get("pb")) if wp.get("pb") is not None else None
+                qb_target = wp.get("qb")
+
+                if pa_target is not None and qa_target is not None:
+                    dq_a = pos_ori_ik_step(model, data, pa_target, qa_target, eef_a, dof_a)
+                    cmd_a = cmd_a + dq_a * 1.5
+                    actual_a = data.qpos[qpos_a]
+                    cmd_a = np.clip(cmd_a, actual_a - 0.4, actual_a + 0.4)
+                    cmd_a = clamp_joints(cmd_a, model, act_a)
+                else:
+                    cmd_a = cmd_a + np.clip(HOME_JOINTS - cmd_a, -0.05, 0.05)
+
+                if pb_target is not None and qb_target is not None:
+                    dq_b = pos_ori_ik_step(model, data, pb_target, qb_target, eef_b, dof_b)
+                    cmd_b = cmd_b + dq_b * 1.5
+                    actual_b = data.qpos[qpos_b]
+                    cmd_b = np.clip(cmd_b, actual_b - 0.4, actual_b + 0.4)
+                    cmd_b = clamp_joints(cmd_b, model, act_b)
+                else:
+                    cmd_b = cmd_b + np.clip(HOME_JOINTS - cmd_b, -0.05, 0.05)
 
             # ── 组装 20-dim action ──
             action = np.zeros(20)
@@ -301,16 +325,25 @@ def auto_collect_main():
             obs, _, *_ = env.step(action)
 
             # ── 进度日志 ──
-            if step_cnt % 150 == 0 and step_cnt > 0:
+            if step_cnt % 50 == 0:
+                print(f"  DEBUG: {wp['n']} | da={da:.3f} | hold={hold_cnt}")
                 mujoco.mj_forward(model, data)
                 da = np.linalg.norm(data.xpos[eef_a] - (pa_target if pa_target is not None else data.xpos[eef_a])) if pa_target is not None else 0
                 db = np.linalg.norm(data.xpos[eef_b] - (pb_target if pb_target is not None else data.xpos[eef_b])) if pb_target is not None else 0
                 print(f"  step {step_cnt:4d}: [{wp['n']}] da={da:.3f} db={db:.3f}")
 
             # ── Waypoint 推进 ──
-            mujoco.mj_forward(model, data)
-            da = np.linalg.norm(data.xpos[eef_a] - pa_target) if pa_target is not None else 0.0
-            db = np.linalg.norm(data.xpos[eef_b] - pb_target) if pb_target is not None else 0.0
+            if wp.get("type") == "joint":
+                # For joint space targets, use joint distance as threshold metric
+                ja_target = wp.get("ja", cmd_a)
+                jb_target = wp.get("jb", cmd_b)
+                da = np.linalg.norm(data.qpos[qpos_a] - ja_target) if wp.get("ja") is not None else 0.0
+                db = np.linalg.norm(data.qpos[qpos_b] - jb_target) if wp.get("jb") is not None else 0.0
+            else:
+                mujoco.mj_forward(model, data)
+                da = np.linalg.norm(data.xpos[eef_a] - pa_target) if pa_target is not None else 0.0
+                db = np.linalg.norm(data.xpos[eef_b] - pb_target) if pb_target is not None else 0.0
+            
             dist = max(da, db)
 
             if dist < wp["tol"]:
@@ -323,6 +356,8 @@ def auto_collect_main():
                     print(f"  → {wp['n']} done (step {step_cnt})")
                     wp_i += 1
 
+            if step_cnt % 50 == 0:
+                print(f"  DEBUG: {wp['n']} | da={da:.3f} db={db:.3f} | hold={hold_cnt}")
             step_cnt += 1
 
         # ── 结果 ──
