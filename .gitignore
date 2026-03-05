@@ -1,5 +1,11 @@
 *~
 *.pyc
+*.tar.gz
+*.zip
+robosuite-master/
+robo_manip_baselines/dataset/
+debug_out.txt
+__pycache__/
 
 venv*
 .python-version*
