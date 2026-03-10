@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 import mujoco
+import glfw
 import numpy as np
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.envs.mujoco.mujoco_rendering import OffScreenViewer
@@ -40,6 +41,7 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
         self.mujoco_renderer.height = None
 
         self.world_random_scale = None
+        self._render_count = 0  # [HACK FOR CPU PERFORMANCE]
 
         self.setup_robot(init_qpos)
         self.setup_camera()
@@ -91,7 +93,15 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
             if self._first_render:
                 self._first_render = False
                 self.mujoco_renderer.viewer._hide_menu = True
-            self.render()
+                
+            # [HACK FOR CPU PERFORMANCE] Throttle rendering but keep polling events
+            self._render_count += 1
+            if self._render_count % 15 == 0:
+                self.render()
+            else:
+                if hasattr(self.mujoco_renderer, "viewer") and hasattr(self.mujoco_renderer.viewer, "window"):
+                    if self.mujoco_renderer.viewer.window:
+                        glfw.poll_events()
 
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
         return obs, reward, terminated, False, info
@@ -100,9 +110,13 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
     def _get_obs(self):
         pass
 
-    def _get_info(self):
+    def get_images(self):
+        """Render all offscreen cameras on demand."""
         # [HACK FOR CPU PERFORMANCE] Disable all offscreen rendering
         return {"rgb_images": {}, "depth_images": {}}
+
+    def _get_info(self):
+        return self.get_images()
         
         info = {}
 
