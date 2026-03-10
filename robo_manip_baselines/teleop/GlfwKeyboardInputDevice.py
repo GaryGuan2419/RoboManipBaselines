@@ -19,6 +19,8 @@ class GlfwKeyboardInputDevice(InputDeviceBase):
     Supports controlling multiple arm_managers with toggle keys (1, 2, ...).
     """
 
+    _attached_windows = set()
+
     def __init__(
         self,
         arm_manager,
@@ -101,9 +103,15 @@ class GlfwKeyboardInputDevice(InputDeviceBase):
         self._viewer = viewer
         self._env = env
         if hasattr(viewer, 'window') and viewer.window is not None:
+            window_id = id(viewer.window)
+            if window_id in GlfwKeyboardInputDevice._attached_windows:
+                # Already attached to this window by another instance (e.g., in dual-arm setups)
+                return
+            
             self._original_key_callback = glfw.set_key_callback(
                 viewer.window, self._glfw_key_callback
             )
+            GlfwKeyboardInputDevice._attached_windows.add(window_id)
             print(f"[{self.__class__.__name__}] GLFW key callback attached to viewer.")
             print(f"[{self.__class__.__name__}] Press P in viewer to print joint angles.")
 
