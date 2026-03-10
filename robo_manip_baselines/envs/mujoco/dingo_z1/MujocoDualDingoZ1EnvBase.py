@@ -254,32 +254,29 @@ class MujocoDualDingoZ1EnvBase(MujocoEnvBase):
         action = np.array(action, dtype=np.float64)
 
         if len(action) <= 17:
-            # Teleop format: [mobile_vel(3), joint_pos(14)]
+            # Legacy teleop format with LOCK_BASE=True: [mobile_vel(3), joint_pos_a(7), joint_pos_b(7)]
             mobile_vel_a = action[0:3].copy()
             joint_pos_a = action[3:10]
             joint_pos_b = action[10:17] if len(action) >= 17 else np.zeros(7)
-
-            # [LOCK_BASE]
-            if self.LOCK_BASE:
-                mobile_vel_a[:] = 0.0
-
-            mujoco_ctrl_a = self._robot_action_to_ctrl(
-                np.concatenate([mobile_vel_a, joint_pos_a]), "robot_a"
-            )
-            mujoco_ctrl_b = self._robot_action_to_ctrl(
-                np.concatenate([np.zeros(3), joint_pos_b]), "robot_b"
-            )
+            mobile_vel_b = np.zeros(3)
         else:
-            # Policy format: [mobile_a(3), arm_a(7), mobile_b(3), arm_b(7)]
-            action_a = action[0:10].copy()
-            action_b = action[10:20].copy()
+            # Correct DataKey format from Teleop/Policy: [v_a(3), v_b(3), j_a(7), j_b(7)]
+            mobile_vel_a = action[0:3].copy()
+            mobile_vel_b = action[3:6].copy()
+            joint_pos_a = action[6:13].copy()
+            joint_pos_b = action[13:20].copy()
 
-            if self.LOCK_BASE:
-                action_a[0:3] = 0.0
-                action_b[0:3] = 0.0
+        # [LOCK_BASE]
+        if self.LOCK_BASE:
+            mobile_vel_a[:] = 0.0
+            mobile_vel_b[:] = 0.0
 
-            mujoco_ctrl_a = self._robot_action_to_ctrl(action_a, "robot_a")
-            mujoco_ctrl_b = self._robot_action_to_ctrl(action_b, "robot_b")
+        mujoco_ctrl_a = self._robot_action_to_ctrl(
+            np.concatenate([mobile_vel_a, joint_pos_a]), "robot_a"
+        )
+        mujoco_ctrl_b = self._robot_action_to_ctrl(
+            np.concatenate([mobile_vel_b, joint_pos_b]), "robot_b"
+        )
 
         # Combine: actuator order in XML is robot_a(9) then robot_b(9) = 18
         mujoco_action = np.concatenate([mujoco_ctrl_a, mujoco_ctrl_b])
