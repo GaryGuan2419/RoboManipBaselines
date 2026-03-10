@@ -154,7 +154,13 @@ class DataKey:
             else:
                 return 6 * num_eef
         elif key in (DataKey.MEASURED_MOBILE_OMNI_VEL, DataKey.COMMAND_MOBILE_OMNI_VEL):
-            return 3
+            from ..body.MobileOmniManager import MobileOmniConfig
+
+            return sum(
+                3
+                for body_config in env.unwrapped.body_config_list
+                if isinstance(body_config, MobileOmniConfig)
+            )
         else:
             raise ValueError(f"[{cls.__name__}] Invalid data key: {key}")
 

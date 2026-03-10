@@ -12,6 +12,9 @@ import psutil
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+import torch.distributed as dist
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from ..data.CachedDataset import CachedDataset
 from ..data.DataKey import DataKey
@@ -30,7 +33,19 @@ class TrainBase(ABC):
     def __init__(self):
         self.setup_args()
 
-        set_random_seed(self.args.seed)
+        self.is_distributed = "LOCAL_RANK" in os.environ
+        if self.is_distributed:
+            dist.init_process_group(backend="nccl")
+            self.local_rank = int(os.environ["LOCAL_RANK"])
+            self.global_rank = int(os.environ["RANK"])
+            self.world_size = int(os.environ["WORLD_SIZE"])
+            torch.cuda.set_device(self.local_rank)
+        else:
+            self.local_rank = 0
+            self.global_rank = 0
+            self.world_size = 1
+
+        set_random_seed(self.args.seed + self.global_rank)
 
         self.setup_rmb_files()
 
@@ -253,11 +268,15 @@ class TrainBase(ABC):
         self.train_dataloader = self.make_dataloader(train_filenames, shuffle=True)
         self.val_dataloader = self.make_dataloader(val_filenames, shuffle=False)
 
-        # Setup tensorboard
-        self.writer = SummaryWriter(self.args.checkpoint_dir)
+        # Setup tensorboard (only on rank 0)
+        if self.global_rank == 0:
+            self.writer = SummaryWriter(self.args.checkpoint_dir)
+        else:
+            self.writer = None
 
         # Print dataset information
-        self.print_dataset_info()
+        if self.global_rank == 0:
+            self.print_dataset_info()
 
     def set_data_stats(self):
         # Load dataset
@@ -372,10 +391,21 @@ class TrainBase(ABC):
         if self.args.use_cached_dataset:
             dataset = CachedDataset(dataset)
 
+        sampler = None
+        if self.is_distributed:
+            sampler = DistributedSampler(
+                dataset,
+                num_replicas=self.world_size,
+                rank=self.global_rank,
+                shuffle=shuffle,
+            )
+            shuffle = False  # Dataloader shuffle must be False when using sampler
+
         dataloader = DataLoader(
             dataset,
             batch_size=self.args.batch_size,
             shuffle=shuffle,
+            sampler=sampler,
             pin_memory=True,
             num_workers=self.args.num_workers,
             persistent_workers=True,
@@ -418,21 +448,23 @@ class TrainBase(ABC):
         )
 
     def run(self):
-        # Save model meta info
-        os.makedirs(self.args.checkpoint_dir, exist_ok=True)
-        model_meta_info_path = os.path.join(
-            self.args.checkpoint_dir, "model_meta_info.pkl"
-        )
-        with open(model_meta_info_path, "wb") as f:
-            pickle.dump(self.model_meta_info, f)
-        print(
-            f"[{self.__class__.__name__}] Save model meta info: {model_meta_info_path}"
-        )
+        if self.global_rank == 0:
+            # Save model meta info
+            os.makedirs(self.args.checkpoint_dir, exist_ok=True)
+            model_meta_info_path = os.path.join(
+                self.args.checkpoint_dir, "model_meta_info.pkl"
+            )
+            with open(model_meta_info_path, "wb") as f:
+                pickle.dump(self.model_meta_info, f)
+            print(
+                f"[{self.__class__.__name__}] Save model meta info: {model_meta_info_path}"
+            )
 
         # Train loop
-        print(
-            f"[{self.__class__.__name__}] Train with saving checkpoints: {self.args.checkpoint_dir}"
-        )
+        if self.global_rank == 0:
+            print(
+                f"[{self.__class__.__name__}] Train with saving checkpoints: {self.args.checkpoint_dir}"
+            )
         self.best_ckpt_info = {"loss": np.inf, "epoch": -1}
         self.train_loop()
 
@@ -464,7 +496,8 @@ class TrainBase(ABC):
             )
 
         for k, v in epoch_summary.items():
-            self.writer.add_scalar(f"{k}/{label}", v, epoch)
+            if self.writer is not None:
+                self.writer.add_scalar(f"{k}/{label}", v, epoch)
 
         return epoch_summary
 
@@ -503,4 +536,7 @@ class TrainBase(ABC):
         return mem_usage
 
     def close(self):
-        self.writer.close()
+        if self.writer is not None:
+            self.writer.close()
+        if self.is_distributed:
+            dist.destroy_process_group()

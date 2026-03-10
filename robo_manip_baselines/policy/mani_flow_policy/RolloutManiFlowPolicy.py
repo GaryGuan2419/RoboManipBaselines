@@ -75,9 +75,11 @@ class RolloutManiFlowPolicy(RolloutBase):
         self.load_ckpt()
 
     def setup_plot(self):
+        # We need as many columns as cameras for the top row to display all views
+        num_cameras = max(1, len(self.camera_names))
         fig_ax = plt.subplots(
             2,
-            1,
+            num_cameras,
             figsize=(13.5, 6.0),
             dpi=60,
             squeeze=False,
@@ -155,7 +157,12 @@ class RolloutManiFlowPolicy(RolloutBase):
     def update_images_buf(self):
         images = []
         for camera_name in self.camera_names:
-            image = self.info["rgb_images"][camera_name]
+            if "rgb_images" in self.info and camera_name in self.info["rgb_images"]:
+                image = self.info["rgb_images"][camera_name]
+            else:
+                # Fallback to manual rendering if info is empty (common in headless/fast modes)
+                rendered_info = self.env.unwrapped.get_images()
+                image = rendered_info["rgb_images"][camera_name]
 
             image = cv2.resize(image, self.model_meta_info["data"]["image_size"])
 

@@ -118,7 +118,7 @@ class DataManager:
             self.episode_idx += 1
 
     def dump_to_rmb(self, filename, all_data_seq, meta_data):
-        os.makedirs(filename)
+        os.makedirs(filename, exist_ok=True)
         hdf5_filename = os.path.join(filename, "main.rmb.hdf5")
         with h5py.File(hdf5_filename, "w") as h5file:
             tasks = []

@@ -3,7 +3,12 @@ import shutil
 
 import h5py
 import numpy as np
-import torchcodec
+try:
+    import torchcodec
+except ImportError:
+    torchcodec = None
+except Exception:
+    torchcodec = None
 import videoio
 
 from .DataKey import DataKey

@@ -18,6 +18,8 @@ import torchvision.transforms as v2
 from maniflow.common.pytorch_util import dict_apply, optimizer_to
 from maniflow.model.common.lr_scheduler import get_scheduler
 from maniflow.model.diffusion.ema_model import EMAModel
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 from maniflow.model.vision_2d.timm_obs_encoder import TimmObsEncoder
 
 from robo_manip_baselines.common import (
@@ -321,8 +323,12 @@ class TrainManiFlowPolicy(TrainBase, TrainPointCloudMixin):
 
         # Transfer to device
         self.policy.cuda()
+        if self.is_distributed:
+            self.policy = DDP(self.policy, device_ids=[self.local_rank], find_unused_parameters=True)
+
         if self.args.use_ema:
             self.ema_policy.cuda()
+                
         optimizer_to(self.optimizer, "cuda")
 
         # Print policy information
@@ -342,11 +348,21 @@ class TrainManiFlowPolicy(TrainBase, TrainPointCloudMixin):
 
     def train_loop(self):
         ema_model = self.ema_policy if self.args.use_ema else None
-        for epoch in tqdm(range(self.args.num_epochs)):
+        
+        # We only want tqdm specifically on rank 0, otherwise it gets messy
+        iterator = range(self.args.num_epochs)
+        if hasattr(self, "global_rank") and self.global_rank == 0:
+            iterator = tqdm(iterator)
+
+        for epoch in iterator:
+            if self.is_distributed and hasattr(self.train_dataloader.sampler, "set_epoch"):
+                self.train_dataloader.sampler.set_epoch(epoch)
+            
             # Run train step
             batch_result_list = []
             for data in self.train_dataloader:
-                loss, _ = self.policy.compute_loss(
+                policy_to_call = self.policy.module if self.is_distributed else self.policy
+                loss, _ = policy_to_call.compute_loss(
                     dict_apply(data, lambda x: x.cuda()), ema_model=ema_model
                 )
                 loss.backward()
@@ -354,7 +370,7 @@ class TrainManiFlowPolicy(TrainBase, TrainPointCloudMixin):
                 self.optimizer.zero_grad()
                 self.lr_scheduler.step()
                 if self.args.use_ema:
-                    self.ema.step(self.policy)
+                    self.ema.step(self.policy.module if self.is_distributed else self.policy)
                 batch_result_list.append(
                     self.detach_batch_result(
                         {"loss": loss, "lr": self.lr_scheduler.get_last_lr()[0]}
@@ -371,7 +387,8 @@ class TrainManiFlowPolicy(TrainBase, TrainPointCloudMixin):
             with torch.inference_mode():
                 batch_result_list = []
                 for data in self.val_dataloader:
-                    loss, _ = policy.compute_loss(
+                    policy_to_call = policy.module if (self.is_distributed and policy is self.policy) else policy
+                    loss, _ = policy_to_call.compute_loss(
                         dict_apply(data, lambda x: x.cuda()), ema_model=ema_model
                     )
                     batch_result_list.append(self.detach_batch_result({"loss": loss}))

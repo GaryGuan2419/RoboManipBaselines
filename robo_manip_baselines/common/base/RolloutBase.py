@@ -579,8 +579,14 @@ class RolloutBase(OperationDataMixin, ABC):
         return filename
 
     def plot_images(self, axes):
+        if "rgb_images" not in self.info or not self.info["rgb_images"]:
+            rendered_info = self.env.unwrapped.get_images()
+        else:
+            rendered_info = self.info
+            
         for camera_idx, camera_name in enumerate(self.camera_names):
-            axes[camera_idx].imshow(self.info["rgb_images"][camera_name])
+            if camera_name in rendered_info.get("rgb_images", {}):
+                axes[camera_idx].imshow(rendered_info["rgb_images"][camera_name])
             axes[camera_idx].set_title(camera_name, fontsize=20)
 
     def plot_action(self, ax):

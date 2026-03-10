@@ -124,6 +124,8 @@ class MotionManager:
                     7 * body_manager.body_config.eef_idx : 7
                     * (body_manager.body_config.eef_idx + 1)
                 ] = single_command
+            elif key == DataKey.COMMAND_MOBILE_OMNI_VEL:
+                command[body_manager.body_config.mobile_vel_idxes] = single_command
             else:
                 command[:] = single_command
 

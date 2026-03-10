@@ -19,7 +19,7 @@ class MobileOmniManager(BodyManagerBase):
 
     def set_command_data(self, key, command, is_skip=False):
         if key == DataKey.COMMAND_MOBILE_OMNI_VEL:
-            self.set_command_vel(command)
+            self.set_command_vel(command[self.body_config.mobile_vel_idxes])
         else:
             raise ValueError(
                 f"[{self.__class__.__name__}] Invalid command data key: {key}"
@@ -48,3 +48,8 @@ class MobileOmniConfig(BodyConfigBase):
     """Configuration for omni-directional mobile base."""
 
     BodyManagerClass = MobileOmniManager
+
+    # Relative indices within the mobile velocity observation/command space
+    mobile_vel_idxes: np.ndarray = dataclasses.field(
+        default_factory=lambda: np.arange(3)
+    )

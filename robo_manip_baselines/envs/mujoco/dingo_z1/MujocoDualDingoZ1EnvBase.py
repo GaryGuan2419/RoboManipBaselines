@@ -127,7 +127,9 @@ class MujocoDualDingoZ1EnvBase(MujocoEnvBase):
                     ),
                 )
             )
-            self.body_config_list.append(MobileOmniConfig())
+            self.body_config_list.append(
+                MobileOmniConfig(mobile_vel_idxes=np.arange(3) + i * 3)
+            )
 
         # Store freejoint names for mobile base control
         self.base_freejoint_names = [
@@ -354,21 +356,34 @@ class MujocoDualDingoZ1EnvBase(MujocoEnvBase):
 
     @property
     def camera_names(self):
-        """Only expose overhead camera for the small window (low perf cost)."""
-        return ["overhead"]
+        """Get the camera names used by this environment."""
+        # Check if cameras exist in the model
+        available_cameras = []
+        for cam in ["overhead", "front", "robot_a_wrist", "robot_b_wrist"]:
+            if cam in self.cameras:
+                available_cameras.append(cam)
+        return available_cameras
 
     def get_images(self):
-        """Render only the overhead camera at low resolution for the small window."""
+        """Render all cameras defined in camera_names."""
         info = {"rgb_images": {}, "depth_images": {}}
-        if "overhead" in self.cameras:
-            cam = self.cameras["overhead"]
-            cam["viewer"].make_context_current()
-            info["rgb_images"]["overhead"] = cam["viewer"].render(
-                render_mode="rgb_array", camera_id=cam["id"]
-            )
-            info["depth_images"]["overhead"] = cam["viewer"].render(
-                render_mode="depth_array", camera_id=cam["id"]
-            )
+        for cam_name in self.camera_names:
+            if cam_name in self.cameras:
+                cam = self.cameras[cam_name]
+                cam["viewer"].make_context_current()
+                info["rgb_images"][cam_name] = cam["viewer"].render(
+                    render_mode="rgb_array", camera_id=cam["id"]
+                )
+                
+                # Render depth and convert to distance
+                depth_image = cam["viewer"].render(
+                    render_mode="depth_array", camera_id=cam["id"]
+                )
+                extent = self.model.stat.extent
+                near = self.model.vis.map.znear * extent
+                far = self.model.vis.map.zfar * extent
+                depth_image = near / (1 - depth_image * (1 - near / far))
+                info["depth_images"][cam_name] = depth_image
         return info
 
     def reset_object(self):

@@ -44,8 +44,8 @@
       </default>
       <default class="robot_a_z1_collision">
         <geom type="cylinder" group="3" mass="0" density="0" 
-              friction="2.0 0.05 0.001" condim="4" 
-              solref="0.02 1.5" solimp="0.9 0.95 0.001" priority="1"/>
+              friction="1.0 0.005 0.0001" condim="3" 
+              solref="0.005 1" solimp="0.95 0.99 0.001" priority="1" margin="0.001"/>
         <default class="robot_a_z1_gripper_stator_collision">
           <geom pos="0.051 0 0" type="mesh"/>
         </default>
@@ -86,8 +86,8 @@
       </default>
       <default class="robot_b_z1_collision">
         <geom type="cylinder" group="3" mass="0" density="0" 
-              friction="2.0 0.05 0.001" condim="4" 
-              solref="0.02 1.5" solimp="0.9 0.95 0.001" priority="1"/>
+              friction="1.0 0.005 0.0001" condim="3" 
+              solref="0.005 1" solimp="0.95 0.99 0.001" priority="1" margin="0.001"/>
         <default class="robot_b_z1_gripper_stator_collision">
           <geom pos="0.051 0 0" type="mesh"/>
         </default>
@@ -138,8 +138,8 @@
 
   <worldbody>
     <!-- Cameras: overhead view for full scene -->
-    <camera name="overhead" pos="0.0 0.0 3.0" euler="0 0 0" fovy="80"/>
-    <camera name="front" pos="0.0 -3.0 1.5" mode="targetbody" target="handover_zone" fovy="70"/>
+    <camera name="overhead" pos="0.0 0.0 2.3" euler="0 0 0" fovy="60"/>
+    <camera name="front" pos="0.0 -2.0 1.2" mode="targetbody" target="handover_zone" fovy="60"/>
 
     <light pos="0 0 3.0" dir="0 0 -1" directional="true" diffuse="0.5 0.5 0.5" castshadow="false"/>
     <light pos="1.0 0 2.0" dir="-0.3 0 -1" directional="false" diffuse="0.2 0.2 0.2"/>
@@ -273,7 +273,7 @@
                         <joint name="robot_a/joint6" axis="1 0 0" range="-2.79253 2.79253"/>
                         <geom class="robot_a_z1_visual" mesh="z1_Link06"/>
                         <geom size="0.0325 0.0255" pos="0.0255 0 0" quat="1 0 1 0" class="robot_a_z1_collision"/>
-                        <camera name="robot_a/wrist" pos="0.08 0 0.05" quat="0.5 0.5 0.5 0.5" fovy="60"/>
+                        <camera name="robot_a/wrist" pos="0.12 0 0.05" quat="0.5 0.5 -0.5 -0.5" fovy="60"/>
                         <!-- Gripper Stator -->
                         <geom pos="0.051 0 0" type="mesh" mesh="z1_GripperStator" class="robot_a_z1_visual"/>
                         <geom class="robot_a_z1_gripper_stator_collision" mesh="z1_GripperStator_col_1"/>
@@ -389,7 +389,7 @@
                         <joint name="robot_b/joint6" axis="1 0 0" range="-2.79253 2.79253"/>
                         <geom class="robot_b_z1_visual" mesh="z1_Link06"/>
                         <geom size="0.0325 0.0255" pos="0.0255 0 0" quat="1 0 1 0" class="robot_b_z1_collision"/>
-                        <camera name="robot_b/wrist" pos="0.08 0 0.05" quat="0.5 0.5 0.5 0.5" fovy="60"/>
+                        <camera name="robot_b/wrist" pos="0.12 0 0.05" quat="0.5 0.5 -0.5 -0.5" fovy="60"/>
                         <!-- Gripper Stator -->
                         <geom pos="0.051 0 0" type="mesh" mesh="z1_GripperStator" class="robot_b_z1_visual"/>
                         <geom class="robot_b_z1_gripper_stator_collision" mesh="z1_GripperStator_col_1"/>
@@ -437,7 +437,7 @@
          ============================================================ -->
     <body name="object" pos="-1.1 0.0 0.40">
       <freejoint name="object_freejoint"/>
-      <geom type="cylinder" size="0.02 0.04" material="cube_mat" mass="0.2" friction="5.0 0.1 0.001" condim="4"/>
+      <geom type="cylinder" size="0.02 0.04" material="cube_mat" mass="0.2" friction="1.0 0.005 0.0001" condim="3"/>
     </body>
   </worldbody>
 

@@ -44,29 +44,38 @@ class OperationDataMixin:
             )
 
         # Add image
+        # Check if images are available in info; if not, force rendering (fallback)
+        if "rgb_images" not in self.info or not self.info["rgb_images"]:
+            rendered_info = self.env.unwrapped.get_images()
+        else:
+            rendered_info = self.info
+
         for camera_name in self.env.unwrapped.camera_names:
-            self.data_manager.append_single_data(
-                DataKey.get_rgb_image_key(camera_name),
-                self.info["rgb_images"][camera_name],
-            )
-            self.data_manager.append_single_data(
-                DataKey.get_depth_image_key(camera_name),
-                self.info["depth_images"][camera_name],
-            )
+            if camera_name in rendered_info.get("rgb_images", {}):
+                self.data_manager.append_single_data(
+                    DataKey.get_rgb_image_key(camera_name),
+                    rendered_info["rgb_images"][camera_name],
+                )
+                self.data_manager.append_single_data(
+                    DataKey.get_depth_image_key(camera_name),
+                    rendered_info["depth_images"][camera_name],
+                )
         for rgb_tactile_name in self.env.unwrapped.rgb_tactile_names:
-            self.data_manager.append_single_data(
-                DataKey.get_rgb_image_key(rgb_tactile_name),
-                self.info["rgb_images"][rgb_tactile_name],
-            )
+            if rgb_tactile_name in rendered_info.get("rgb_images", {}):
+                self.data_manager.append_single_data(
+                    DataKey.get_rgb_image_key(rgb_tactile_name),
+                    rendered_info["rgb_images"][rgb_tactile_name],
+                )
         for pointcloud_camera_name in self.env.unwrapped.pointcloud_camera_names:
-            self.data_manager.append_single_data(
-                DataKey.get_rgb_image_key(pointcloud_camera_name),
-                self.info["rgb_images"][pointcloud_camera_name],
-            )
-            self.data_manager.append_single_data(
-                DataKey.get_depth_image_key(pointcloud_camera_name),
-                self.info["depth_images"][pointcloud_camera_name],
-            )
+            if pointcloud_camera_name in rendered_info.get("rgb_images", {}):
+                self.data_manager.append_single_data(
+                    DataKey.get_rgb_image_key(pointcloud_camera_name),
+                    rendered_info["rgb_images"][pointcloud_camera_name],
+                )
+                self.data_manager.append_single_data(
+                    DataKey.get_depth_image_key(pointcloud_camera_name),
+                    rendered_info["depth_images"][pointcloud_camera_name],
+                )
 
         # Add tactile
         if "intensity_tactile" in self.info:
