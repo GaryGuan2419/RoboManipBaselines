@@ -92,7 +92,7 @@ class GlfwKeyboardInputDevice(InputDeviceBase):
   - UO   : Yaw rotation
   - Z/X  : Gripper close/open
   - P    : Print joint angles
-  - B    : Reset object position (bring back)""")
+  # - B    : Reset object position (bring back)""")
         if n > 1:
             keys_str = ", ".join(f"{k+1}={robot_names[k]}" for k in range(n))
             print(f"  - {keys_str} : Switch robot")
@@ -118,12 +118,12 @@ class GlfwKeyboardInputDevice(InputDeviceBase):
                 print("[P] print_joint_state not available")
 
         # Reset object position on B press (bring back)
-        if key == glfw.KEY_B and action == glfw.PRESS:
-            if self._env and hasattr(self._env, 'reset_object'):
-                self._env.reset_object()
-                print("[B] 圆柱体已归位")
-            else:
-                print("[B] reset_object not available")
+        # if key == glfw.KEY_B and action == glfw.PRESS:
+        #     if self._env and hasattr(self._env, 'reset_object'):
+        #         self._env.reset_object()
+        #         print("[B] 圆柱体已归位")
+        #     else:
+        #         print("[B] reset_object not available")
 
         # Handle robot switching on press only
         if key in self._switch_keys and action == glfw.PRESS:
