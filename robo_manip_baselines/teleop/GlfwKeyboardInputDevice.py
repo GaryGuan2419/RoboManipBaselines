@@ -42,8 +42,8 @@ class GlfwKeyboardInputDevice(InputDeviceBase):
         # Track key states
         self.state = {
             # position control keys (GLFW key constants)
-            glfw.KEY_T: False,   # forward (was W, avoid MuJoCo S/F conflict)
-            glfw.KEY_G: False,   # backward
+            glfw.KEY_W: False,   # forward
+            glfw.KEY_S: False,   # backward
             glfw.KEY_A: False,
             glfw.KEY_D: False,
             glfw.KEY_Q: False,
@@ -84,15 +84,14 @@ class GlfwKeyboardInputDevice(InputDeviceBase):
         robot_names = ["Robot A", "Robot B", "Robot C", "Robot D"][:n]
         print(f"[{self.__class__.__name__}] Connected (GLFW mode).")
         print(f"[{self.__class__.__name__}] Controlling: {robot_names[self.active_idx]}")
-        print(f"""[{self.__class__.__name__}] Key Bindings (press in MuJoCo viewer window):
-  - T/G  : X-axis forward/backward
-  - A/D  : Y-axis left/right
-  - QE   : Z-axis up/down
-  - IJKL : Roll and Pitch rotation
-  - UO   : Yaw rotation
-  - Z/X  : Gripper close/open
-  - P    : Print joint angles
-  - B    : Reset object position (bring back)""")
+        print(f"[{self.__class__.__name__}] Key Bindings (press in MuJoCo viewer window):")
+        print("  - WASD : X/Y-axis forward/backward, left/right")
+        print("  - QE   : Z-axis up/down")
+        print("  - IJKL : Roll and Pitch rotation")
+        print("  - UO   : Yaw rotation")
+        print("  - Z/X  : Gripper close/open")
+        print("  - P    : Print joint angles")
+        print("  - B    : Reset object position (bring back)")
         if n > 1:
             keys_str = ", ".join(f"{k+1}={robot_names[k]}" for k in range(n))
             print(f"  - {keys_str} : Switch robot")
@@ -140,6 +139,10 @@ class GlfwKeyboardInputDevice(InputDeviceBase):
             elif action == glfw.RELEASE:
                 self.state[key] = False
 
+        # Intercept WASD keys to prevent conflicts with default MuJoCo viewer hotkeys (like S for shadows)
+        if key in [glfw.KEY_W, glfw.KEY_A, glfw.KEY_S, glfw.KEY_D]:
+            return
+
         # Chain to original callback if it existed
         if self._original_key_callback is not None:
             self._original_key_callback(window, key, scancode, action, mods)
@@ -153,9 +156,9 @@ class GlfwKeyboardInputDevice(InputDeviceBase):
         delta_pos = np.zeros(3)
 
         # X-axis (forward / backward)
-        if self.state[glfw.KEY_T]:
+        if self.state[glfw.KEY_W]:
             delta_pos[0] += self.pos_scale
-        if self.state[glfw.KEY_G]:
+        if self.state[glfw.KEY_S]:
             delta_pos[0] -= self.pos_scale
 
         # Y-axis
