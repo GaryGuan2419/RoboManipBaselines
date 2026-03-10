@@ -282,8 +282,9 @@ class MujocoDualDingoZ1EnvBase(MujocoEnvBase):
         mujoco_action = np.concatenate([mujoco_ctrl_a, mujoco_ctrl_b])
 
         # [MOCAP GRASP] Dynamically attach object to gripper using kinematic override
-        self._update_mocap_grasp("robot_a")
-        self._update_mocap_grasp("robot_b")
+        # Disabled for real physical collision testing
+        # self._update_mocap_grasp("robot_a")
+        # self._update_mocap_grasp("robot_b")
 
         self.do_simulation(mujoco_action, self.frame_skip)
 
