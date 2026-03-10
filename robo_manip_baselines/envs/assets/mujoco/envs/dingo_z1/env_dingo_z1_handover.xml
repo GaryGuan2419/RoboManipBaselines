@@ -16,6 +16,9 @@
     <texture name="cube_tex" type="cube" file="general/metal2.png"/>
     <material name="cube_mat" texture="cube_tex" rgba="0.2 0.6 0.9 1.0" specular="1.0" shininess="1.0"/>
     <material name="target_mat" rgba="0.9 0.2 0.2 0.5" specular="0.3" shininess="0.3"/>
+    
+    <!-- Custom Meshes -->
+    <mesh name="prism_16" file="object_16prism.obj" scale="1 1 1"/>
     <material name="handover_mat" rgba="0.2 0.9 0.2 0.3" specular="0.3" shininess="0.3"/>
     <material name="table_wood" rgba="0.6 0.4 0.2 1.0" specular="0.3" shininess="0.5"/>
   </asset>
@@ -435,9 +438,11 @@
          robot qpos indices come first (robot_a: 0-15, robot_b: 16-31,
          object: 32-38)
          ============================================================ -->
+    <!-- Graspable object (16-sided prism standing upright on table) -->
     <body name="object" pos="-1.1 0.0 0.40">
       <freejoint name="object_freejoint"/>
-      <geom type="cylinder" size="0.02 0.04" material="cube_mat" mass="0.2" friction="1.0 0.005 0.0001" condim="3"/>
+      <!-- Mesh collision to prevent point-contact chatter with gripper -->
+      <geom type="mesh" mesh="prism_16" material="cube_mat" mass="0.2" friction="1.0 0.005 0.0001" condim="3"/>
     </body>
   </worldbody>
 
