@@ -6,7 +6,7 @@ from gymnasium.spaces import Box, Dict
 
 from robo_manip_baselines.common import ArmConfig, DataKey
 from robo_manip_baselines.teleop import (
-    KeyboardInputDevice,
+    GlfwKeyboardInputDevice,
     SpacemouseInputDevice,
 )
 
@@ -14,6 +14,16 @@ from ..MujocoEnvBase import MujocoEnvBase
 
 
 class MujocoAlohaEnvBase(MujocoEnvBase):
+    sim_timestep = 0.004
+    metadata = {
+        "render_modes": [
+            "human",
+            "rgb_array",
+            "depth_array",
+        ],
+        "render_fps": int(1 / (sim_timestep * MujocoEnvBase.frame_skip)),
+    }
+
     default_camera_config = {
         "azimuth": 0.0,
         "elevation": -20.0,
@@ -68,7 +78,7 @@ class MujocoAlohaEnvBase(MujocoEnvBase):
         if input_device_name == "spacemouse":
             InputDeviceClass = SpacemouseInputDevice
         elif input_device_name == "keyboard":
-            InputDeviceClass = KeyboardInputDevice
+            InputDeviceClass = GlfwKeyboardInputDevice
         else:
             raise ValueError(
                 f"[{self.__class__.__name__}] Invalid input device key: {input_device_name}"
@@ -88,7 +98,12 @@ class MujocoAlohaEnvBase(MujocoEnvBase):
         ]
 
     def get_input_device_kwargs(self, input_device_name):
-        if input_device_name == "spacemouse":
+        if input_device_name == "keyboard":
+            return {
+                0: {"pos_scale": 2e-3, "rpy_scale": 1e-2, "gripper_scale": 10.0},
+                1: {"pos_scale": 2e-3, "rpy_scale": 1e-2, "gripper_scale": 10.0},
+            }
+        elif input_device_name == "spacemouse":
             return {0: {"rpy_scale": 2e-2}, 1: {"rpy_scale": 2e-2}}
         else:
             return super().get_input_device_kwargs(input_device_name)
