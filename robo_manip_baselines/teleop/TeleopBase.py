@@ -23,6 +23,7 @@ from robo_manip_baselines.common import (
     remove_suffix,
     set_random_seed,
 )
+from robo_manip_baselines.teleop.GlfwKeyboardInputDevice import GlfwKeyboardInputDevice
 
 
 class InitialTeleopPhase(PhaseBase):
@@ -476,6 +477,14 @@ class TeleopBase(OperationDataMixin, ABC):
 
             self.obs, self.reward, _, _, self.info = self.env.step(action)
             
+            # Attach GLFW keyboard device to viewer after the first render creates the window
+            if self._loop_count == 0 and hasattr(self.env.unwrapped, "mujoco_renderer"):
+                viewer = self.env.unwrapped.mujoco_renderer.viewer
+                if viewer is not None:
+                    for device in self.input_device_list:
+                        if isinstance(device, GlfwKeyboardInputDevice):
+                            device.attach_to_viewer(viewer, env=self.env.unwrapped)
+                            
             self._loop_count += 1
             
             # Throttle all offscreen rendering to every 30 steps (perf vs visual)
@@ -518,7 +527,9 @@ class TeleopBase(OperationDataMixin, ABC):
                 self.iteration_duration_list.append(iteration_duration)
 
             if (not self.auto_mode) and (iteration_duration < self.env.unwrapped.dt):
-                time.sleep(self.env.unwrapped.dt - iteration_duration)
+                sleep_time = max(0.0, self.env.unwrapped.dt - iteration_duration)
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
 
         if self.args.result_filename is not None:
             print(
