@@ -101,6 +101,9 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
         pass
 
     def _get_info(self):
+        # [HACK FOR CPU PERFORMANCE] Disable all offscreen rendering
+        return {"rgb_images": {}, "depth_images": {}}
+        
         info = {}
 
         # If no cameras or specifically in headless mode without render_mode, skip rendering to save time/avoid hangs
