@@ -1,0 +1,47 @@
+# Ultimate dual-HSR line demo: baton x=-2, handover x=0, goal x=+2
+# Navigation uses the same world-frame offsets as dual_hsr_handover_geometry (oracle bodies).
+
+nav_source: oracle
+no_nav_fallback: false
+# Optional: OpenCV windows during ManiFlow (none | policy | all). Override with --camera_preview.
+# camera_preview: none
+
+kp_pos: 2.0
+kp_yaw: 2.0
+max_steps_nav: 1600
+
+warmup_hold_steps: 50
+pick_skill_steps: 60
+handover_skill_steps: 150
+place_skill_steps: 30
+
+# B gripper qpos (smaller = more closed). Require closed for this many consecutive steps before opening A.
+b_grip_takeover_qpos: 0.22
+release_dwell_steps: 12
+a_open_cmd: 0.85
+# After nav + arm align: hold physics before handover policy (helps if B still sliding).
+handover_settle_steps: 40
+# First N handover policy steps: zero B chassis cmd (arm+grip from policy). 0 = off.
+handover_freeze_b_base_steps: 0
+
+# Policy checkpoints (paths relative to repo root). Use side_* 与数据采集一致。
+checkpoint_pick: robo_manip_baselines/checkpoint/ManiFlowPolicy/hsr_side_pick/policy_best.ckpt
+checkpoint_handover: robo_manip_baselines/checkpoint/ManiFlowPolicy/hsr_side_handover/policy_best.ckpt
+checkpoint_place: robo_manip_baselines/checkpoint/ManiFlowPolicy/hsr_side_place/policy_best.ckpt
+
+# B handover stance: base geometry uses +Y vs A at -Y (see dual_hsr_handover_geometry). Add extra [dx,dy] if needed.
+handover_b_xy_extra: [0.0, 0.0]
+
+# After handover: rotate B to face +world_X, then drive to target_area with offset (world frame).
+b_reorient_to_plus_x: true
+b_place_yaw_plus_x: 0.0
+# Place nav offset: base_xy = target_area_xy + offset.
+# tidyup_place | b_side_place (x from b-side, y from tidyup −0.08 — avoids −1m y bug) | b_side_place_full | custom
+b_place_sampling_env: b_side_place
+# If b_place_sampling_env is custom, set b_place_offset_facing_plus_x: [dx, dy] explicitly.
+# First strafe to goal line y, then move along ±X (avoids diagonal "sideways" approach).
+b_place_two_phase: true
+# While |yaw_err| > this, rotate only (cleaner +X heading before translating).
+b_place_nav_yaw_gate: 0.06
+# Optional: fix world y of the approach line (omit to use target_area.y + offset[1]).
+# b_place_world_line_y: 0.0
