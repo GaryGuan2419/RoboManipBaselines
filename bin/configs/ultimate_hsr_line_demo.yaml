@@ -14,6 +14,10 @@ warmup_hold_steps: 50
 pick_skill_steps: 60
 handover_skill_steps: 150
 place_skill_steps: 30
+# After arm align, hold physics before place policy (reduces first-step grip/arm jerk vs teleop start).
+place_pre_policy_hold_steps: 24
+# Optional: lower than default hold_dual integral if this hold feels too stiff.
+# place_pre_hold_arm_integral_gain: 0.04
 
 # B gripper qpos (smaller = more closed). Require closed for this many consecutive steps before opening A.
 b_grip_takeover_qpos: 0.22

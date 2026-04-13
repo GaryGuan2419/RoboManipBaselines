@@ -120,6 +120,10 @@ def main():
     a_open = float(cfg.get("a_open_cmd", 0.85))
     handover_settle_steps = int(cfg.get("handover_settle_steps", 40))
     handover_freeze_b_base_steps = int(cfg.get("handover_freeze_b_base_steps", 0))
+    place_pre_policy_hold_steps = int(cfg.get("place_pre_policy_hold_steps", 20))
+    place_pre_hold_arm_integral_gain = float(
+        cfg.get("place_pre_hold_arm_integral_gain", 0.04)
+    )
 
     cam_prev = args.camera_preview if args.camera_preview is not None else cfg.get(
         "camera_preview", "none"
@@ -479,6 +483,20 @@ def main():
                 hold_start_gripper=False,
             )
         mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+
+        if place_pre_policy_hold_steps > 0:
+            print(
+                f"[Place] Pre-policy hold: {place_pre_policy_hold_steps} steps "
+                f"(B tight grip; settle contact before ManiFlow)."
+            )
+            hold_dual_pose_steps(
+                env.unwrapped,
+                place_pre_policy_hold_steps,
+                force_tight_grip_robots=(1,),
+                render_fn=(lambda: env.render()) if render_mode == "human" else None,
+                arm_integral_gain=place_pre_hold_arm_integral_gain,
+            )
+            mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
 
         # Reuse dummy_tidyup — a third MuJoCo (old place_dummy) + place ckpt often OOM-kills here.
         # Policy images are filled from the dual env in execute_skill_dual; dummy is for MotionManager only.
