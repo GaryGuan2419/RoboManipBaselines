@@ -27,7 +27,7 @@ if _BIN not in sys.path:
     sys.path.insert(0, _BIN)
 
 import handover_config as hc  # noqa: E402
-from handover_utils import align_arm_to_pose  # noqa: E402
+from handover_utils import align_arm_to_pose, hold_dual_pose_steps  # noqa: E402
 
 from robo_manip_baselines.envs.mujoco.hsr.MujocoDualHsrUltimateLineEnv import (  # noqa: E402
     MujocoDualHsrUltimateLineEnv,
@@ -343,12 +343,14 @@ def main():
     if handover_settle_steps > 0:
         print(
             f"[Handover] Pre-policy settle: {handover_settle_steps} hold steps "
-            "(physics + bases still before ManiFlow may close B grip)."
+            "(measured arm pose; A tight grip; bases still before ManiFlow)."
         )
-        for _ in range(handover_settle_steps):
-            env.step(env.get_hold_action())
-            if render_mode == "human":
-                env.render()
+        hold_dual_pose_steps(
+            env.unwrapped,
+            handover_settle_steps,
+            force_tight_grip_robots=(0,),
+            render_fn=(lambda: env.render()) if render_mode == "human" else None,
+        )
         mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
 
     if not args.skip_policies:
@@ -499,10 +501,12 @@ def main():
         print("[Skip] place policy")
 
     print("\n[System] Ultimate line demo sequence finished.")
-    for _ in range(80):
-        env.step(env.get_hold_action())
-        if render_mode == "human":
-            env.render()
+    hold_dual_pose_steps(
+        env.unwrapped,
+        80,
+        force_tight_grip_robots=(),
+        render_fn=(lambda: env.render()) if render_mode == "human" else None,
+    )
 
     preview_cameras_close()
     if dummy_tidyup is not None:

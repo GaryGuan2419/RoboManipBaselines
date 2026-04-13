@@ -5,6 +5,8 @@ from __future__ import annotations
 import mujoco
 import numpy as np
 
+from handover_utils import build_dual_hold_targets_from_current, dual_hold_action_from_targets
+
 # OpenCV preview window names (destroyed between policy phases).
 _CV_PREVIEW_WINDOWS = []
 
@@ -64,6 +66,7 @@ def navigate_to_dual(
     force_tight_grip_robots=(),
     lock_arm_to_init=False,
     yaw_gate: float = 0.0,
+    post_arrival_hold_steps: int = 8,
 ):
     robot_name = "A" if robot_index == 0 else "B"
     print(
@@ -145,13 +148,12 @@ def navigate_to_dual(
 
         if dist_err < 0.005 and yaw_err_abs < 0.01:
             print(f"[Navigation] Robot {robot_name} arrived in {step} steps.")
-            for _ in range(5):
-                action = np.zeros(18)
-                for i in range(2):
-                    o = locked[i]["offset"]
-                    action[o + 3 : o + 8] = locked[i]["arm"]
-                    action[o + 8] = locked[i]["grip"]
-                env.step(action)
+            mujoco.mj_forward(env.model, env.data)
+            # Re-snap arm+grip targets to **measured** qpos so PD does not fight stale nav-start
+            # lock (reduces end-of-nav sag / jerk).
+            snap = build_dual_hold_targets_from_current(env, force_tight_grip_robots)
+            for _ in range(max(0, int(post_arrival_hold_steps))):
+                env.step(dual_hold_action_from_targets(snap))
             return True
 
         v_x_global = kp_pos * err_x
@@ -389,7 +391,8 @@ def execute_skill_dual(
         mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{idle_prefix}/hand_motor_joint")
     ]
 
-    idle_arm_locked = [env.init_qpos[addr] for addr in idle_arm_addrs]
+    # Idle robot: hold **current** measured pose (spawn init_qpos is wrong after nav / align).
+    idle_arm_locked = [float(env.data.qpos[addr]) for addr in idle_arm_addrs]
     idle_grip_locked = env.data.qpos[idle_grip_addr]
     if idle_grip_locked < 0.6:
         idle_grip_locked -= 0.1

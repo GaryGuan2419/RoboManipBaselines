@@ -177,3 +177,47 @@ def render_robot_cameras(env, robot_prefix, rgb_only=False):
     if not rgb_only:
         result["depth_images"] = depth_images
     return result
+
+
+def build_dual_hold_targets_from_current(env, force_tight_grip_robots=()):
+    """Arm command = measured qpos; grip command matches ``navigate_to_dual`` squeeze rule."""
+    ft = set(force_tight_grip_robots)
+    out = {}
+    for i in (0, 1):
+        arm = read_arm_joints(env, i).copy()
+        g = float(read_gripper(env, i))
+        if i in ft:
+            g_cmd = min(g - 0.18, _TIGHT_GRIP_CMD)
+        elif g < 0.6:
+            g_cmd = g - 0.1
+        else:
+            g_cmd = g
+        out[i] = {"arm": arm, "grip": g_cmd}
+    return out
+
+
+def dual_hold_action_from_targets(locked_by_robot: dict) -> np.ndarray:
+    """18-dim action: zero base velocity; arms + grip from ``locked_by_robot`` [0,1]."""
+    action = np.zeros(18, dtype=np.float64)
+    for i, off in ((0, 0), (1, 9)):
+        action[off + 3 : off + 8] = locked_by_robot[i]["arm"]
+        action[off + 8] = locked_by_robot[i]["grip"]
+    return action
+
+
+def hold_dual_pose_steps(
+    env,
+    n_steps: int,
+    *,
+    force_tight_grip_robots=(),
+    render_fn=None,
+    mj_forward_first=True,
+):
+    """Hold both arms at **current** measured pose (one snapshot at start). Base cmd = 0."""
+    if mj_forward_first:
+        mujoco.mj_forward(env.model, env.data)
+    snap = build_dual_hold_targets_from_current(env, force_tight_grip_robots)
+    for _ in range(n_steps):
+        env.step(dual_hold_action_from_targets(snap))
+        if render_fn is not None:
+            render_fn()
