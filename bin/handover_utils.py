@@ -9,6 +9,8 @@ from handover_config import ARM_JOINT_NAMES, GRIPPER_JOINT_NAME
 
 # Match bin/ultimate_line_demo_lib.navigate_to_dual(force_tight_grip): squeeze so grasp does not open.
 _TIGHT_GRIP_CMD = -0.30
+# Idle robot during align: outer-loop correction toward pose at align start (reduces gravity sag).
+_ALIGN_OTHER_ARM_INTEGRAL_GAIN = 0.14
 
 
 def get_arm_qpos_addrs(env, prefix):
@@ -87,9 +89,10 @@ def align_arm_to_pose(
     current_grip = read_gripper(env, robot_index)
     idx_offset = robot_index * 9
 
-    # Lock the other robot (arm pose fixed at start; grip refreshed each step below)
+    # Lock the other robot: hold reference pose at align start + integral vs measured (reduces sag).
     other_idx = 1 - robot_index
-    other_arm = read_arm_joints(env, other_idx)
+    other_ref = read_arm_joints(env, other_idx).copy()
+    other_cmd = other_ref.copy()
     other_offset = other_idx * 9
 
     def _tight_grip_command(g_qpos: float) -> float:
@@ -105,12 +108,15 @@ def align_arm_to_pose(
         else:
             interp_grip = (1.0 - alpha) * current_grip + alpha * target_gripper
 
+        qm_other = read_arm_joints(env, other_idx)
+        other_cmd = other_cmd + _ALIGN_OTHER_ARM_INTEGRAL_GAIN * (other_ref - qm_other)
+
         action = np.zeros(18)
         # Active robot: interpolated arm + gripper
         action[idx_offset + 3:idx_offset + 8] = interp_arm
         action[idx_offset + 8] = interp_grip
         # Other robot: hold arm; live grip (open = pass-through, grasp = tight squeeze)
-        action[other_offset + 3:other_offset + 8] = other_arm
+        action[other_offset + 3:other_offset + 8] = other_cmd
         og = read_gripper(env, other_idx)
         action[other_offset + 8] = _tight_grip_command(og) if og < 0.6 else og
 
@@ -205,6 +211,21 @@ def dual_hold_action_from_targets(locked_by_robot: dict) -> np.ndarray:
     return action
 
 
+def _locked_dict_grip_refresh(env, locked, force_tight_grip_robots):
+    ft = set(force_tight_grip_robots)
+    for i, pfx in enumerate(["robot_a", "robot_b"]):
+        gaddr = env.model.jnt_qposadr[
+            mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{pfx}/hand_motor_joint")
+        ]
+        g = float(env.data.qpos[gaddr])
+        if i in ft:
+            locked[i]["grip"] = min(g - 0.18, _TIGHT_GRIP_CMD)
+        elif g < 0.6:
+            locked[i]["grip"] = g - 0.1
+        else:
+            locked[i]["grip"] = g
+
+
 def hold_dual_pose_steps(
     env,
     n_steps: int,
@@ -212,12 +233,39 @@ def hold_dual_pose_steps(
     force_tight_grip_robots=(),
     render_fn=None,
     mj_forward_first=True,
+    arm_integral_gain: float = 0.14,
 ):
-    """Hold both arms at **current** measured pose (one snapshot at start). Base cmd = 0."""
+    """Hold both arms near the snapshot pose using integral correction (reduces long-hold sag)."""
     if mj_forward_first:
         mujoco.mj_forward(env.model, env.data)
     snap = build_dual_hold_targets_from_current(env, force_tight_grip_robots)
+    locked = {
+        i: {
+            "arm": [float(x) for x in snap[i]["arm"]],
+            "grip": float(snap[i]["grip"]),
+        }
+        for i in (0, 1)
+    }
+    locked_ref = np.zeros((2, 5), dtype=np.float64)
+    for i in (0, 1):
+        for j in range(5):
+            locked_ref[i, j] = locked[i]["arm"][j]
+    per_robot_arm_addrs = [
+        [
+            env.model.jnt_qposadr[
+                mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{pfx}/{j}")
+            ]
+            for j in ARM_JOINT_NAMES
+        ]
+        for pfx in ["robot_a", "robot_b"]
+    ]
     for _ in range(n_steps):
-        env.step(dual_hold_action_from_targets(snap))
+        for i in (0, 1):
+            for j, addr in enumerate(per_robot_arm_addrs[i]):
+                q = float(env.data.qpos[addr])
+                e = float(locked_ref[i, j]) - q
+                locked[i]["arm"][j] += arm_integral_gain * e
+        _locked_dict_grip_refresh(env, locked, force_tight_grip_robots)
+        env.step(dual_hold_action_from_targets(locked))
         if render_fn is not None:
             render_fn()

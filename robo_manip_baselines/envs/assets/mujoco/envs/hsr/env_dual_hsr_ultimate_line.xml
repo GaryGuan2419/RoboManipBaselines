@@ -1,0 +1,417 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="dual_hsr_ultimate_line"><include file="./env_hsr_common.xml" /><compiler angle="radian" autolimits="true" meshdir="../../assets/meshes" />
+
+  <option integrator="implicitfast" />
+
+  <default>
+    <default class="hsr">
+      <position dampratio="1" inheritrange="1" />
+      <default class="visual">
+        <geom contype="0" conaffinity="0" />
+      </default>
+      <default class="collision">
+        <geom group="3" />
+      </default>
+    </default>
+  </default>
+
+  <asset><mesh name="base" file="hsr/base_v2/base.stl" />
+    <mesh name="laser" file="hsr/sensors/laser.stl" />
+    <mesh name="bumper" file="hsr/base_v2/bumper.stl" />
+    <mesh name="torso" file="hsr/torso_v0/torso.stl" />
+    <mesh name="head_pan" file="hsr/head_v1/head_pan.stl" />
+    <mesh name="head" file="hsr/head_v1/head.stl" />
+    <mesh name="tablet" file="hsr/head_v1/tablet.stl" />
+    <mesh name="xtion" file="hsr/sensors/xtion.stl" />
+    <mesh name="shoulder" file="hsr/arm_v0/shoulder.stl" />
+    <mesh name="arm_flex" file="hsr/arm_v0/arm_flex.stl" />
+    <mesh name="arm_roll" file="hsr/arm_v0/arm_roll.stl" />
+    <mesh name="wrist_roll" file="hsr/wrist_v0/wrist_roll.stl" />
+    <mesh name="palm" file="hsr/hand_v0/palm.stl" />
+    <mesh name="l_proximal" file="hsr/hand_v0/l_proximal.stl" />
+    <mesh name="l_distal" file="hsr/hand_v0/l_distal.stl" />
+    <mesh name="r_proximal" file="hsr/hand_v0/r_proximal.stl" />
+    <mesh name="r_distal" file="hsr/hand_v0/r_distal.stl" />
+
+    <material name="hsr_white" rgba="1.0 1.0 1.0 1" />
+    <material name="hsr_black" rgba="0.3 0.3 0.3 1" />
+  <texture name="bottle" file="general/metal2.png" type="cube" /><material name="bottle1" texture="bottle" rgba="0.1 0.5 0.8 1.0" specular="1.0" shininess="1.0" /><material name="bottle2" texture="bottle" rgba="0.8 0.1 0.5 1.0" specular="1.0" shininess="1.0" /><texture name="container1" type="cube" file="general/wood1.png" /><material name="container1" texture="container1" rgba="0.1 0.5 0.1 1.0" /><material name="container2" texture="container1" rgba="0.5 0.1 0.1 1.0" /></asset><worldbody><light pos="0 0 1.5" dir="0 0 -1" directional="true" diffuse="0.3 0.3 0.3" /><geom name="floor" size="0 0 0.05" type="plane" material="floor" pos="0 0 0.0" /><body name="robot_a/hsr_body" pos="0.0 0.0 0.0">
+    <body name="robot_a/base_link">
+      <joint name="robot_a/mobile_x_joint" type="slide" axis="1 0 0" />
+      <joint name="robot_a/mobile_y_joint" type="slide" axis="0 1 0" />
+      <joint name="robot_a/mobile_theta_joint" axis="0 0 1" />
+      <inertial pos="-0.025978 -0.005498 0.17633" quat="0.995796 0.0411155 -0.0685908 0.0446655" mass="50" diaginertia="0.378627 0.344913 0.145159" />
+      <geom type="mesh" mesh="base" material="hsr_white" />
+      <body name="robot_a/base_range_sensor_link" pos="0.1675 0 0.1844">
+        <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+        <geom type="mesh" mesh="laser" material="hsr_black" />
+      </body>
+      <body name="robot_a/base_imu_frame" pos="0.0005 0.1296 0.181">
+        <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+      </body>
+      <body name="robot_a/base_f_bumper_link">
+        <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5" mass="0.06" diaginertia="0.001875 0.001437 0.001437" />
+        
+        <geom type="mesh" mesh="bumper" material="hsr_black" />
+      </body>
+      <body name="robot_a/base_b_bumper_link" pos="0 0.0013 0" quat="0 0 0 1">
+        <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5" mass="0.06" diaginertia="0.001875 0.001437 0.001437" />
+        
+        <geom type="mesh" mesh="bumper" material="hsr_black" />
+      </body>
+      <body name="robot_a/torso_lift_link" pos="0 0 0.752">
+        <inertial pos="-0.051142 0.003454 -0.2905" quat="0.511154 0.00760492 -0.0140194 0.859341" mass="3.42078" diaginertia="0.105342 0.104252 0.0127461" />
+        
+        
+        <geom type="mesh" mesh="torso" material="hsr_black" pos="1e-3 0 0" />
+        <body name="robot_a/head_pan_link">
+          <inertial pos="0.001724 -0.001969 -0.028886" quat="0.865343 0.459592 0.192259 -0.0547077" mass="0.571903" diaginertia="0.00102408 0.00077623 0.000589392" />
+          
+          <geom type="mesh" mesh="head_pan" material="hsr_white" />
+          <body name="robot_a/head_tilt_link" pos="0.02 0 0">
+            <inertial pos="-0.055376 -0.002436 0.117733" quat="0.973833 0.0131235 -0.226864 -0.00327368" mass="2.1238" diaginertia="0.0218915 0.0149823 0.0091862" />
+            
+            <geom type="mesh" mesh="head" material="hsr_white" />
+            <geom type="mesh" mesh="tablet" material="hsr_black" pos="1e-3 0 0" />
+            <body name="robot_a/head_l_stereo_camera_link" pos="0.02 0.07 0.061" quat="0.5 -0.5 0.5 -0.5">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <body name="robot_a/head_l_stereo_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
+                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              </body>
+            </body>
+            <body name="robot_a/head_r_stereo_camera_link" pos="0.02 -0.07 0.061" quat="0.5 -0.5 0.5 -0.5">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <body name="robot_a/head_r_stereo_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
+                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              </body>
+            </body>
+            <body name="robot_a/head_center_camera_frame" pos="0.0195 0 0.061" quat="0.5 -0.5 0.5 -0.5">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <body name="robot_a/head_center_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
+                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              </body>
+            </body>
+            <body name="robot_a/head_rgbd_sensor_link" pos="-0.079796 0.022 0.215172" quat="0.5 -0.5 0.5 -0.5">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <geom type="mesh" mesh="xtion" material="hsr_black" />
+              <camera name="robot_a/head" fovy="62" pos="0 0 0.1" euler="2 0 0" />
+              <body name="robot_a/head_rgbd_sensor_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
+                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="robot_a/arm_lift_link" pos="0 0 0.34">
+        <inertial pos="0.051549 0.042438 -0.064145" quat="-0.111496 0.499152 -0.110462 0.852182" mass="1.27582" diaginertia="0.00909548 0.00799354 0.00328099" />
+        <joint name="robot_a/arm_lift_joint" pos="0 0 0" axis="0 0 1" type="slide" range="0 0.69" actuatorfrcrange="-300 300" damping="1" />
+        <geom type="mesh" mesh="shoulder" material="hsr_white" />
+        <body name="robot_a/arm_flex_link" pos="0.141 0.078 0">
+          <inertial pos="0.000632 0.006404 0.118529" quat="0.99969 -0.008317 0.0017536 -0.0233824" mass="1.33929" diaginertia="0.00752902 0.00710259 0.00155039" />
+          <joint name="robot_a/arm_flex_joint" pos="0 0 0" axis="0 -1 0" range="-2.62 0" actuatorfrcrange="-100 100" damping="1" />
+          <geom type="mesh" mesh="arm_flex" material="hsr_white" />
+          <body name="robot_a/arm_roll_link" pos="0.005 0 0.345">
+            <inertial pos="-0.006927 0.002039 -0.064837" quat="0.704471 0.707171 -0.0444888 0.0406182" mass="0.247936" diaginertia="0.00426928 0.00411787 0.00078077" />
+            <joint name="robot_a/arm_roll_joint" pos="0 0 0" axis="0 0 1" range="-2.09 3.84" actuatorfrcrange="-100 100" damping="0.1" />
+            <geom type="mesh" mesh="arm_roll" material="hsr_white" />
+            <body name="robot_a/wrist_flex_link">
+              <inertial pos="0.000131 -0.003929 0.00217" quat="0.672298 0.740248 0.0055614 0.00418043" mass="0.681225" diaginertia="7.43604e-05 6.49274e-05 3.81796e-05" />
+              <joint name="robot_a/wrist_flex_joint" pos="0 0 0" axis="0 -1 0" range="-1.92 1.22" actuatorfrcrange="-100 100" damping="1" />
+              <geom size="0.017 0.02" pos="0 0 0.03" type="cylinder" rgba="0.33 0.33 0.33 1" material="hsr_black" />
+              <body name="robot_a/wrist_ft_sensor_mount_link">
+                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                <joint name="robot_a/wrist_roll_joint" pos="0 0 0" axis="0 0 1" range="-1.92 3.67" actuatorfrcrange="-100 100" damping="1" />
+                <body name="robot_a/wrist_ft_sensor_frame" pos="0 0 0.0735" quat="0 1 0 0">
+                  <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                  
+                  <site name="robot_a/force_sensor" pos="0 0 0" type="box" size="0.005 0.005 0.01" rgba="0.6 0.1 0.1 1" group="2" />
+                  <body name="robot_a/wrist_roll_link" pos="0 0 0.0735" quat="0 -1 0 0">
+                    <inertial pos="-0.001416 -0.001547 0.081689" quat="0.988073 0.0424396 -0.0351605 -0.143785" mass="0.761692" diaginertia="0.000811657 0.000766039 0.000449422" />
+                    <geom type="mesh" mesh="wrist_roll" material="hsr_white" />
+                    <body name="robot_a/hand_palm_link" pos="0.012 0 0.1405" quat="0 0 0 1">
+                      <inertial pos="0 0 0" mass="0.15" diaginertia="0.015 0.015 0.015" />
+                      <geom type="mesh" mesh="palm" material="hsr_white" />
+                      <body name="robot_a/hand_motor_dummy_link">
+                        <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                        <joint name="robot_a/hand_motor_joint" pos="0 0 0" axis="1 0 0" range="-0.798 1.24" actuatorfrcrange="-100 100" damping="0.0001" />
+                      </body>
+                      <body name="robot_a/hand_l_proximal_link" pos="-0.01675 -0.0245 -0.0175">
+                        <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                        <joint name="robot_a/hand_l_proximal_joint" pos="0 0 0" axis="1 0 0" range="-0.798 1.24" actuatorfrcrange="-100 100" damping="0.0001" />
+                        <body name="robot_a/hand_l_spring_proximal_link">
+                          <inertial pos="0.021418 0.00248 0.022688" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                          
+                          <geom type="mesh" mesh="l_proximal" material="hsr_black" />
+                          <body name="robot_a/hand_l_mimic_distal_link" pos="0 0 0.07">
+                            <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                            
+                            <body name="robot_a/hand_l_distal_link">
+                              <inertial pos="0.011116 0.005679 0.017532" mass="0.001" diaginertia="0 0 0" />
+                              
+                              <geom class="visual" type="mesh" mesh="l_distal" material="hsr_black" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.03" friction="0.7 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.015" friction="0.6 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <body name="robot_a/hand_l_finger_tip_frame" pos="0.01675 0.01865 0.04289" quat="0.707107 -0.707107 0 0">
+                                <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                              </body>
+                              <body name="robot_a/hand_l_finger_vacuum_frame" pos="0.00475 -0.011539 0.03322" quat="0.92388 0.382683 0 0">
+                                <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                      </body>
+                      <body name="robot_a/hand_r_proximal_link" pos="-0.01675 0.0245 -0.0175">
+                        <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                        <joint name="robot_a/hand_r_proximal_joint" pos="0 0 0" axis="-1 0 0" range="-0.798 1.24" actuatorfrcrange="-100 100" damping="0.0001" />
+                        <body name="robot_a/hand_r_spring_proximal_link">
+                          <inertial pos="0.013203 0.002096 0.023311" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                          
+                          <geom type="mesh" mesh="r_proximal" material="hsr_black" />
+                          <body name="robot_a/hand_r_mimic_distal_link" pos="0 0 0.07">
+                            <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                            
+                            <body name="robot_a/hand_r_distal_link">
+                              <inertial pos="0.014256 -0.008321 0.015591" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                              
+                              <geom class="visual" type="mesh" mesh="r_distal" material="hsr_black" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.03" friction="0.7 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.015" friction="0.6 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <body name="robot_a/hand_r_finger_tip_frame" pos="0.01675 -0.01865 0.04289" quat="0.707107 0.707107 0 0">
+                                <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                      </body>
+                      <body name="robot_a/hand_camera_frame" pos="0.039 0 -0.0045">
+                        <camera name="robot_a/hand" fovy="80" pos="-0.02 0 0" euler="0 3.1415 1.57" />
+                        <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                        <body name="robot_a/hand_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
+                          <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </body>
+<body name="robot_b/hsr_body" pos="0.0 0.0 0.0">
+    <body name="robot_b/base_link">
+      <joint name="robot_b/mobile_x_joint" type="slide" axis="1 0 0" />
+      <joint name="robot_b/mobile_y_joint" type="slide" axis="0 1 0" />
+      <joint name="robot_b/mobile_theta_joint" axis="0 0 1" />
+      <inertial pos="-0.025978 -0.005498 0.17633" quat="0.995796 0.0411155 -0.0685908 0.0446655" mass="50" diaginertia="0.378627 0.344913 0.145159" />
+      <geom type="mesh" mesh="base" material="hsr_white" />
+      <body name="robot_b/base_range_sensor_link" pos="0.1675 0 0.1844">
+        <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+        <geom type="mesh" mesh="laser" material="hsr_black" />
+      </body>
+      <body name="robot_b/base_imu_frame" pos="0.0005 0.1296 0.181">
+        <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+      </body>
+      <body name="robot_b/base_f_bumper_link">
+        <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5" mass="0.06" diaginertia="0.001875 0.001437 0.001437" />
+        
+        <geom type="mesh" mesh="bumper" material="hsr_black" />
+      </body>
+      <body name="robot_b/base_b_bumper_link" pos="0 0.0013 0" quat="0 0 0 1">
+        <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5" mass="0.06" diaginertia="0.001875 0.001437 0.001437" />
+        
+        <geom type="mesh" mesh="bumper" material="hsr_black" />
+      </body>
+      <body name="robot_b/torso_lift_link" pos="0 0 0.752">
+        <inertial pos="-0.051142 0.003454 -0.2905" quat="0.511154 0.00760492 -0.0140194 0.859341" mass="3.42078" diaginertia="0.105342 0.104252 0.0127461" />
+        
+        
+        <geom type="mesh" mesh="torso" material="hsr_black" pos="1e-3 0 0" />
+        <body name="robot_b/head_pan_link">
+          <inertial pos="0.001724 -0.001969 -0.028886" quat="0.865343 0.459592 0.192259 -0.0547077" mass="0.571903" diaginertia="0.00102408 0.00077623 0.000589392" />
+          
+          <geom type="mesh" mesh="head_pan" material="hsr_white" />
+          <body name="robot_b/head_tilt_link" pos="0.02 0 0">
+            <inertial pos="-0.055376 -0.002436 0.117733" quat="0.973833 0.0131235 -0.226864 -0.00327368" mass="2.1238" diaginertia="0.0218915 0.0149823 0.0091862" />
+            
+            <geom type="mesh" mesh="head" material="hsr_white" />
+            <geom type="mesh" mesh="tablet" material="hsr_black" pos="1e-3 0 0" />
+            <body name="robot_b/head_l_stereo_camera_link" pos="0.02 0.07 0.061" quat="0.5 -0.5 0.5 -0.5">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <body name="robot_b/head_l_stereo_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
+                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              </body>
+            </body>
+            <body name="robot_b/head_r_stereo_camera_link" pos="0.02 -0.07 0.061" quat="0.5 -0.5 0.5 -0.5">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <body name="robot_b/head_r_stereo_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
+                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              </body>
+            </body>
+            <body name="robot_b/head_center_camera_frame" pos="0.0195 0 0.061" quat="0.5 -0.5 0.5 -0.5">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <body name="robot_b/head_center_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
+                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              </body>
+            </body>
+            <body name="robot_b/head_rgbd_sensor_link" pos="-0.079796 0.022 0.215172" quat="0.5 -0.5 0.5 -0.5">
+              <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <geom type="mesh" mesh="xtion" material="hsr_black" />
+              <camera name="robot_b/head" fovy="62" pos="0 0 0.1" euler="2 0 0" />
+              <body name="robot_b/head_rgbd_sensor_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
+                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="robot_b/arm_lift_link" pos="0 0 0.34">
+        <inertial pos="0.051549 0.042438 -0.064145" quat="-0.111496 0.499152 -0.110462 0.852182" mass="1.27582" diaginertia="0.00909548 0.00799354 0.00328099" />
+        <joint name="robot_b/arm_lift_joint" pos="0 0 0" axis="0 0 1" type="slide" range="0 0.69" actuatorfrcrange="-300 300" damping="1" />
+        <geom type="mesh" mesh="shoulder" material="hsr_white" />
+        <body name="robot_b/arm_flex_link" pos="0.141 0.078 0">
+          <inertial pos="0.000632 0.006404 0.118529" quat="0.99969 -0.008317 0.0017536 -0.0233824" mass="1.33929" diaginertia="0.00752902 0.00710259 0.00155039" />
+          <joint name="robot_b/arm_flex_joint" pos="0 0 0" axis="0 -1 0" range="-2.62 0" actuatorfrcrange="-100 100" damping="1" />
+          <geom type="mesh" mesh="arm_flex" material="hsr_white" />
+          <body name="robot_b/arm_roll_link" pos="0.005 0 0.345">
+            <inertial pos="-0.006927 0.002039 -0.064837" quat="0.704471 0.707171 -0.0444888 0.0406182" mass="0.247936" diaginertia="0.00426928 0.00411787 0.00078077" />
+            <joint name="robot_b/arm_roll_joint" pos="0 0 0" axis="0 0 1" range="-2.09 3.84" actuatorfrcrange="-100 100" damping="0.1" />
+            <geom type="mesh" mesh="arm_roll" material="hsr_white" />
+            <body name="robot_b/wrist_flex_link">
+              <inertial pos="0.000131 -0.003929 0.00217" quat="0.672298 0.740248 0.0055614 0.00418043" mass="0.681225" diaginertia="7.43604e-05 6.49274e-05 3.81796e-05" />
+              <joint name="robot_b/wrist_flex_joint" pos="0 0 0" axis="0 -1 0" range="-1.92 1.22" actuatorfrcrange="-100 100" damping="1" />
+              <geom size="0.017 0.02" pos="0 0 0.03" type="cylinder" rgba="0.33 0.33 0.33 1" material="hsr_black" />
+              <body name="robot_b/wrist_ft_sensor_mount_link">
+                <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                <joint name="robot_b/wrist_roll_joint" pos="0 0 0" axis="0 0 1" range="-1.92 3.67" actuatorfrcrange="-100 100" damping="1" />
+                <body name="robot_b/wrist_ft_sensor_frame" pos="0 0 0.0735" quat="0 1 0 0">
+                  <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                  
+                  <site name="robot_b/force_sensor" pos="0 0 0" type="box" size="0.005 0.005 0.01" rgba="0.6 0.1 0.1 1" group="2" />
+                  <body name="robot_b/wrist_roll_link" pos="0 0 0.0735" quat="0 -1 0 0">
+                    <inertial pos="-0.001416 -0.001547 0.081689" quat="0.988073 0.0424396 -0.0351605 -0.143785" mass="0.761692" diaginertia="0.000811657 0.000766039 0.000449422" />
+                    <geom type="mesh" mesh="wrist_roll" material="hsr_white" />
+                    <body name="robot_b/hand_palm_link" pos="0.012 0 0.1405" quat="0 0 0 1">
+                      <inertial pos="0 0 0" mass="0.15" diaginertia="0.015 0.015 0.015" />
+                      <geom type="mesh" mesh="palm" material="hsr_white" />
+                      <body name="robot_b/hand_motor_dummy_link">
+                        <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                        <joint name="robot_b/hand_motor_joint" pos="0 0 0" axis="1 0 0" range="-0.798 1.24" actuatorfrcrange="-100 100" damping="0.0001" />
+                      </body>
+                      <body name="robot_b/hand_l_proximal_link" pos="-0.01675 -0.0245 -0.0175">
+                        <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                        <joint name="robot_b/hand_l_proximal_joint" pos="0 0 0" axis="1 0 0" range="-0.798 1.24" actuatorfrcrange="-100 100" damping="0.0001" />
+                        <body name="robot_b/hand_l_spring_proximal_link">
+                          <inertial pos="0.021418 0.00248 0.022688" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                          
+                          <geom type="mesh" mesh="l_proximal" material="hsr_black" />
+                          <body name="robot_b/hand_l_mimic_distal_link" pos="0 0 0.07">
+                            <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                            
+                            <body name="robot_b/hand_l_distal_link">
+                              <inertial pos="0.011116 0.005679 0.017532" mass="0.001" diaginertia="0 0 0" />
+                              
+                              <geom class="visual" type="mesh" mesh="l_distal" material="hsr_black" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.03" friction="0.7 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.015" friction="0.6 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <body name="robot_b/hand_l_finger_tip_frame" pos="0.01675 0.01865 0.04289" quat="0.707107 -0.707107 0 0">
+                                <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                              </body>
+                              <body name="robot_b/hand_l_finger_vacuum_frame" pos="0.00475 -0.011539 0.03322" quat="0.92388 0.382683 0 0">
+                                <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                      </body>
+                      <body name="robot_b/hand_r_proximal_link" pos="-0.01675 0.0245 -0.0175">
+                        <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                        <joint name="robot_b/hand_r_proximal_joint" pos="0 0 0" axis="-1 0 0" range="-0.798 1.24" actuatorfrcrange="-100 100" damping="0.0001" />
+                        <body name="robot_b/hand_r_spring_proximal_link">
+                          <inertial pos="0.013203 0.002096 0.023311" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                          
+                          <geom type="mesh" mesh="r_proximal" material="hsr_black" />
+                          <body name="robot_b/hand_r_mimic_distal_link" pos="0 0 0.07">
+                            <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                            
+                            <body name="robot_b/hand_r_distal_link">
+                              <inertial pos="0.014256 -0.008321 0.015591" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                              
+                              <geom class="visual" type="mesh" mesh="r_distal" material="hsr_black" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.03" friction="0.7 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.015" friction="0.6 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <body name="robot_b/hand_r_finger_tip_frame" pos="0.01675 -0.01865 0.04289" quat="0.707107 0.707107 0 0">
+                                <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                      </body>
+                      <body name="robot_b/hand_camera_frame" pos="0.039 0 -0.0045">
+                        <camera name="robot_b/hand" fovy="80" pos="-0.02 0 0" euler="0 3.1415 1.57" />
+                        <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                        <body name="robot_b/hand_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
+                          <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </body>
+<body name="bottle2" pos="-2.0 0.0 0.01"><freejoint name="bottle2_freejoint" /><geom name="baton_upper" type="box" size="0.025 0.025 0.035" pos="0 0 0.105" rgba="0.95 0.08 0.08 1" condim="4" friction="1.5 0.05 0.005" solimp="0.95 0.99 0.001" solref="0.004 1" /><geom name="baton_lower" type="box" size="0.025 0.025 0.035" pos="0 0 0.035" rgba="0.08 0.2 0.95 1" condim="4" friction="1.5 0.05 0.005" solimp="0.95 0.99 0.001" solref="0.004 1" /></body><body name="handover_area" pos="0.0 0.0 0.0" mocap="true"><geom type="box" size="0.08 0.08 0.002" rgba="0 0.85 0.2 0.55" contype="0" conaffinity="0" /></body><body name="target_area" pos="2.0 0.0 0.0" mocap="true"><geom type="box" size="0.10 0.10 0.003" rgba="0.15 0.35 1.0 0.75" contype="0" conaffinity="0" /></body>
+<!-- Handover (same framing vs handover_area as env_dual_hsr_demo.xml): dual handover x=1.0 -> ultimate x=0, shift (-1,0,0). -->
+<camera name="side_view" pos="-0.45 -0.7 0.35" xyaxes="1 0 0 0 0.3 1" fovy="65" />
+<camera name="overhead_view" pos="-1.2 0 3.0" xyaxes="0 -1 0 1 0 0" fovy="70" />
+
+<!-- Pick: dual bottle x=-0.2 -> ultimate x=-2.0, extra shift (-1.8,0,0) on top of dual pick camera poses. -->
+<camera name="pick_side_view" pos="-1.82 -0.78 0.35" xyaxes="1 0 0 0 0.3 1" fovy="65" />
+<camera name="pick_overhead_view" pos="-1.82 0.0 0.9" xyaxes="0 -1 0 1 0 0" fovy="70" />
+<!-- Place: same offset from target_area as env_hsr_tidyup_place (target 0.65,0.08 -> cam side/overhead); ultimate target (2,0). -->
+<camera name="place_side_view" pos="1.9 -0.78 0.35" xyaxes="1 0 0 0 0.3 1" fovy="65" />
+<camera name="place_overhead_view" pos="1.9 0.0 0.9" xyaxes="0 -1 0 1 0 0" fovy="70" /></worldbody><actuator><velocity name="robot_a/mobile_x_joint" joint="robot_a/mobile_x_joint" ctrlrange="-1 1" kv="1000" />
+    <velocity name="robot_a/mobile_y_joint" joint="robot_a/mobile_y_joint" ctrlrange="-1 1" kv="1000" />
+    <velocity name="robot_a/mobile_theta_joint" joint="robot_a/mobile_theta_joint" ctrlrange="-1 1" kv="1000" />
+    <position class="hsr" kp="2000" name="robot_a/arm_lift_joint" joint="robot_a/arm_lift_joint" />
+    <!-- Stiffer arms than default hsr_config (ultimate-line long nav + dual hold). -->
+    <position class="hsr" kp="400" name="robot_a/arm_flex_joint" joint="robot_a/arm_flex_joint" />
+    <position class="hsr" kp="25" name="robot_a/arm_roll_joint" joint="robot_a/arm_roll_joint" />
+    <position class="hsr" kp="350" name="robot_a/wrist_flex_joint" joint="robot_a/wrist_flex_joint" />
+    <position class="hsr" kp="20" name="robot_a/wrist_roll_joint" joint="robot_a/wrist_roll_joint" />
+    <position class="hsr" kp="18" name="robot_a/hand_motor_joint" joint="robot_a/hand_motor_joint" />
+  <velocity name="robot_b/mobile_x_joint" joint="robot_b/mobile_x_joint" ctrlrange="-1 1" kv="1000" />
+    <velocity name="robot_b/mobile_y_joint" joint="robot_b/mobile_y_joint" ctrlrange="-1 1" kv="1000" />
+    <velocity name="robot_b/mobile_theta_joint" joint="robot_b/mobile_theta_joint" ctrlrange="-1 1" kv="1000" />
+    <position class="hsr" kp="2000" name="robot_b/arm_lift_joint" joint="robot_b/arm_lift_joint" />
+    <position class="hsr" kp="400" name="robot_b/arm_flex_joint" joint="robot_b/arm_flex_joint" />
+    <position class="hsr" kp="25" name="robot_b/arm_roll_joint" joint="robot_b/arm_roll_joint" />
+    <position class="hsr" kp="350" name="robot_b/wrist_flex_joint" joint="robot_b/wrist_flex_joint" />
+    <position class="hsr" kp="20" name="robot_b/wrist_roll_joint" joint="robot_b/wrist_roll_joint" />
+    <position class="hsr" kp="18" name="robot_b/hand_motor_joint" joint="robot_b/hand_motor_joint" />
+  </actuator><sensor><force name="robot_a/force_sensor" site="robot_a/force_sensor" />
+    <torque name="robot_a/torque_sensor" site="robot_a/force_sensor" />
+  <force name="robot_b/force_sensor" site="robot_b/force_sensor" />
+    <torque name="robot_b/torque_sensor" site="robot_b/force_sensor" />
+  </sensor><equality><joint joint1="robot_a/hand_motor_joint" joint2="robot_a/hand_l_proximal_joint" polycoef="0 1 0 0 0" solimp="0.95 0.99 0.001" solref="0.005 1" />
+    <joint joint1="robot_a/hand_motor_joint" joint2="robot_a/hand_r_proximal_joint" polycoef="0 1 0 0 0" solimp="0.95 0.99 0.001" solref="0.005 1" />
+  <joint joint1="robot_b/hand_motor_joint" joint2="robot_b/hand_l_proximal_joint" polycoef="0 1 0 0 0" solimp="0.95 0.99 0.001" solref="0.005 1" />
+    <joint joint1="robot_b/hand_motor_joint" joint2="robot_b/hand_r_proximal_joint" polycoef="0 1 0 0 0" solimp="0.95 0.99 0.001" solref="0.005 1" />
+  </equality><contact><exclude body1="robot_a/base_link" body2="robot_a/torso_lift_link" />
+    <exclude body1="robot_a/base_link" body2="robot_a/arm_lift_link" />
+    <exclude body1="robot_a/base_link" body2="robot_a/arm_flex_link" />
+    <exclude body1="robot_a/torso_lift_link" body2="robot_a/arm_lift_link" />
+    <exclude body1="robot_a/arm_lift_link" body2="robot_a/arm_flex_link" />
+  <exclude body1="robot_b/base_link" body2="robot_b/torso_lift_link" />
+    <exclude body1="robot_b/base_link" body2="robot_b/arm_lift_link" />
+    <exclude body1="robot_b/base_link" body2="robot_b/arm_flex_link" />
+    <exclude body1="robot_b/torso_lift_link" body2="robot_b/arm_lift_link" />
+    <exclude body1="robot_b/arm_lift_link" body2="robot_b/arm_flex_link" />
+  </contact></mujoco>

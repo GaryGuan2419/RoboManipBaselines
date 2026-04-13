@@ -16,6 +16,36 @@ _PICK_CAMERA_MAP = {
 }
 _TIGHT_GRIP_CMD = -0.30
 
+# Outer-loop correction: cmd += gain * (q_ref - q_meas) each step to fight gravity sag
+# while keeping q_ref = joint target at segment start (not pure measured tracking).
+_NAV_ARM_LOCK_INTEGRAL_GAIN = 0.16
+_SKILL_IDLE_ARM_INTEGRAL_GAIN = 0.14
+_HANDOVER_A_ARM_INTEGRAL_GAIN = 0.14
+
+
+def _refresh_locked_grip_from_qpos(env, locked, force_tight_grip_robots):
+    ft = set(force_tight_grip_robots)
+    for i, pfx in enumerate(["robot_a", "robot_b"]):
+        gaddr = env.model.jnt_qposadr[
+            mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{pfx}/hand_motor_joint")
+        ]
+        g = float(env.data.qpos[gaddr])
+        if i in ft:
+            locked[i]["grip"] = min(g - 0.18, _TIGHT_GRIP_CMD)
+        elif g < 0.6:
+            locked[i]["grip"] = g - 0.1
+        else:
+            locked[i]["grip"] = g
+
+
+def _refresh_arm_lock_integral(env, locked, locked_ref_arm, per_robot_arm_addrs, i_gain: float):
+    """Adjust commanded arm targets toward segment reference vs measured qpos."""
+    for i in (0, 1):
+        for j, addr in enumerate(per_robot_arm_addrs[i]):
+            q = float(env.data.qpos[addr])
+            e = float(locked_ref_arm[i, j]) - q
+            locked[i]["arm"][j] = float(locked[i]["arm"][j]) + i_gain * e
+
 # World-camera routing for logical keys side_view / overhead_view (see CAMERA_AND_POLICY_ALIGNMENT.txt).
 # "pick"    -> pick_* (baton-centered, side_pick training in dual)
 # "handover"-> dual side_view + overhead_view — **only used if** checkpoint meta lists them
@@ -118,6 +148,20 @@ def navigate_to_dual(
 
         locked[i] = {"arm": locked_arm, "grip": locked_grip, "offset": offset}
 
+    per_robot_arm_addrs = [
+        [
+            env.model.jnt_qposadr[
+                mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{pfx}/{j}")
+            ]
+            for j in arm_joint_names
+        ]
+        for pfx in ["robot_a", "robot_b"]
+    ]
+    locked_ref_arm = np.zeros((2, 5), dtype=np.float64)
+    for i in (0, 1):
+        for j in range(5):
+            locked_ref_arm[i, j] = float(locked[i]["arm"][j])
+
     for step in range(max_steps):
         current_x = env.data.qpos[qpos_adrs[0]]
         current_y = env.data.qpos[qpos_adrs[1]]
@@ -136,6 +180,14 @@ def navigate_to_dual(
             v_x_local = v_y_local = 0.0
             v_theta_local = kp_yaw * err_yaw
             v_theta_local = np.clip(v_theta_local, -0.8, 0.8)
+            _refresh_arm_lock_integral(
+                env,
+                locked,
+                locked_ref_arm,
+                per_robot_arm_addrs,
+                _NAV_ARM_LOCK_INTEGRAL_GAIN,
+            )
+            _refresh_locked_grip_from_qpos(env, locked, force_tight_grip_robots)
             action = np.zeros(18)
             idx_offset = robot_index * 9
             action[idx_offset : idx_offset + 3] = [0.0, 0.0, v_theta_local]
@@ -165,6 +217,14 @@ def navigate_to_dual(
         v_local_xy = np.clip([v_x_local, v_y_local], -0.6, 0.6)
         v_theta_local = np.clip(v_theta_local, -0.8, 0.8)
 
+        _refresh_arm_lock_integral(
+            env,
+            locked,
+            locked_ref_arm,
+            per_robot_arm_addrs,
+            _NAV_ARM_LOCK_INTEGRAL_GAIN,
+        )
+        _refresh_locked_grip_from_qpos(env, locked, force_tight_grip_robots)
         action = np.zeros(18)
         idx_offset = robot_index * 9
         action[idx_offset : idx_offset + 3] = [v_local_xy[0], v_local_xy[1], v_theta_local]
@@ -391,11 +451,9 @@ def execute_skill_dual(
         mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{idle_prefix}/hand_motor_joint")
     ]
 
-    # Idle robot: hold **current** measured pose (spawn init_qpos is wrong after nav / align).
-    idle_arm_locked = [float(env.data.qpos[addr]) for addr in idle_arm_addrs]
-    idle_grip_locked = env.data.qpos[idle_grip_addr]
-    if idle_grip_locked < 0.6:
-        idle_grip_locked -= 0.1
+    # Idle robot: reference pose at skill start + integral correction (reduces sag vs fixed cmd).
+    idle_arm_ref = np.array([float(env.data.qpos[addr]) for addr in idle_arm_addrs], dtype=np.float64)
+    idle_arm_cmd = idle_arm_ref.copy()
 
     ck_cams = getattr(planner, "camera_names", None)
     phase_tag = f"{robot_name}_{skill_name}"
@@ -410,10 +468,15 @@ def execute_skill_dual(
         }
         single_action = planner.get_action(single_obs, info)
 
+        q_idle = np.array([float(env.data.qpos[addr]) for addr in idle_arm_addrs], dtype=np.float64)
+        idle_arm_cmd = idle_arm_cmd + _SKILL_IDLE_ARM_INTEGRAL_GAIN * (idle_arm_ref - q_idle)
+        g_idle = float(env.data.qpos[idle_grip_addr])
+        idle_g_cmd = g_idle - 0.1 if g_idle < 0.6 else g_idle
+
         full_action = np.zeros(18)
         full_action[idx_offset : idx_offset + 9] = single_action
-        full_action[idle_offset + 3 : idle_offset + 8] = idle_arm_locked
-        full_action[idle_offset + 8] = idle_grip_locked
+        full_action[idle_offset + 3 : idle_offset + 8] = idle_arm_cmd
+        full_action[idle_offset + 8] = idle_g_cmd
 
         obs, _r, _t, _tr, _i = env.step(full_action)
 
@@ -464,7 +527,8 @@ def execute_handover_b_release_a_when_closed(
         ]
         for j in arm_joint_names
     ]
-    a_arm_lock = [float(env.data.qpos[a]) for a in a_addrs]
+    a_arm_ref = np.array([float(env.data.qpos[a]) for a in a_addrs], dtype=np.float64)
+    a_arm_cmd = a_arm_ref.copy()
     b_grip_addr = env.model.jnt_qposadr[
         mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, "robot_b/hand_motor_joint")
     ]
@@ -485,11 +549,14 @@ def execute_handover_b_release_a_when_closed(
         }
         single_action = planner.get_action(single_obs, info)
 
+        q_a = np.array([float(env.data.qpos[a]) for a in a_addrs], dtype=np.float64)
+        a_arm_cmd = a_arm_cmd + _HANDOVER_A_ARM_INTEGRAL_GAIN * (a_arm_ref - q_a)
+
         full_action = np.zeros(18)
         full_action[9:18] = single_action
         if freeze_b_base_steps > 0 and _step < freeze_b_base_steps:
             full_action[9:12] = 0.0
-        full_action[3:8] = a_arm_lock
+        full_action[3:8] = a_arm_cmd
         g_b = float(env.data.qpos[b_grip_addr])
         if not released:
             if g_b <= b_grip_takeover_qpos:
