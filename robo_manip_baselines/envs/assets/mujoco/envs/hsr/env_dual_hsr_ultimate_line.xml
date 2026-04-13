@@ -381,21 +381,21 @@
     <velocity name="robot_a/mobile_y_joint" joint="robot_a/mobile_y_joint" ctrlrange="-1 1" kv="1000" />
     <velocity name="robot_a/mobile_theta_joint" joint="robot_a/mobile_theta_joint" ctrlrange="-1 1" kv="1000" />
     <position class="hsr" kp="2000" name="robot_a/arm_lift_joint" joint="robot_a/arm_lift_joint" />
-    <!-- Stiffer arms than default hsr_config (ultimate-line long nav + dual hold). -->
-    <position class="hsr" kp="400" name="robot_a/arm_flex_joint" joint="robot_a/arm_flex_joint" />
-    <position class="hsr" kp="25" name="robot_a/arm_roll_joint" joint="robot_a/arm_roll_joint" />
-    <position class="hsr" kp="350" name="robot_a/wrist_flex_joint" joint="robot_a/wrist_flex_joint" />
-    <position class="hsr" kp="20" name="robot_a/wrist_roll_joint" joint="robot_a/wrist_roll_joint" />
-    <position class="hsr" kp="18" name="robot_a/hand_motor_joint" joint="robot_a/hand_motor_joint" />
+    <!-- Slightly stiffer than default hsr_config; softer than first ultimate-line pass (less overshoot). -->
+    <position class="hsr" kp="220" name="robot_a/arm_flex_joint" joint="robot_a/arm_flex_joint" />
+    <position class="hsr" kp="14" name="robot_a/arm_roll_joint" joint="robot_a/arm_roll_joint" />
+    <position class="hsr" kp="200" name="robot_a/wrist_flex_joint" joint="robot_a/wrist_flex_joint" />
+    <position class="hsr" kp="12" name="robot_a/wrist_roll_joint" joint="robot_a/wrist_roll_joint" />
+    <position class="hsr" kp="12" name="robot_a/hand_motor_joint" joint="robot_a/hand_motor_joint" />
   <velocity name="robot_b/mobile_x_joint" joint="robot_b/mobile_x_joint" ctrlrange="-1 1" kv="1000" />
     <velocity name="robot_b/mobile_y_joint" joint="robot_b/mobile_y_joint" ctrlrange="-1 1" kv="1000" />
     <velocity name="robot_b/mobile_theta_joint" joint="robot_b/mobile_theta_joint" ctrlrange="-1 1" kv="1000" />
     <position class="hsr" kp="2000" name="robot_b/arm_lift_joint" joint="robot_b/arm_lift_joint" />
-    <position class="hsr" kp="400" name="robot_b/arm_flex_joint" joint="robot_b/arm_flex_joint" />
-    <position class="hsr" kp="25" name="robot_b/arm_roll_joint" joint="robot_b/arm_roll_joint" />
-    <position class="hsr" kp="350" name="robot_b/wrist_flex_joint" joint="robot_b/wrist_flex_joint" />
-    <position class="hsr" kp="20" name="robot_b/wrist_roll_joint" joint="robot_b/wrist_roll_joint" />
-    <position class="hsr" kp="18" name="robot_b/hand_motor_joint" joint="robot_b/hand_motor_joint" />
+    <position class="hsr" kp="220" name="robot_b/arm_flex_joint" joint="robot_b/arm_flex_joint" />
+    <position class="hsr" kp="14" name="robot_b/arm_roll_joint" joint="robot_b/arm_roll_joint" />
+    <position class="hsr" kp="200" name="robot_b/wrist_flex_joint" joint="robot_b/wrist_flex_joint" />
+    <position class="hsr" kp="12" name="robot_b/wrist_roll_joint" joint="robot_b/wrist_roll_joint" />
+    <position class="hsr" kp="12" name="robot_b/hand_motor_joint" joint="robot_b/hand_motor_joint" />
   </actuator><sensor><force name="robot_a/force_sensor" site="robot_a/force_sensor" />
     <torque name="robot_a/torque_sensor" site="robot_a/force_sensor" />
   <force name="robot_b/force_sensor" site="robot_b/force_sensor" />

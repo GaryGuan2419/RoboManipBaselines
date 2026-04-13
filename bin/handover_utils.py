@@ -10,7 +10,7 @@ from handover_config import ARM_JOINT_NAMES, GRIPPER_JOINT_NAME
 # Match bin/ultimate_line_demo_lib.navigate_to_dual(force_tight_grip): squeeze so grasp does not open.
 _TIGHT_GRIP_CMD = -0.30
 # Idle robot during align: outer-loop correction toward pose at align start (reduces gravity sag).
-_ALIGN_OTHER_ARM_INTEGRAL_GAIN = 0.14
+_ALIGN_OTHER_ARM_INTEGRAL_GAIN = 0.06
 
 
 def get_arm_qpos_addrs(env, prefix):
@@ -109,7 +109,9 @@ def align_arm_to_pose(
             interp_grip = (1.0 - alpha) * current_grip + alpha * target_gripper
 
         qm_other = read_arm_joints(env, other_idx)
-        other_cmd = other_cmd + _ALIGN_OTHER_ARM_INTEGRAL_GAIN * (other_ref - qm_other)
+        delta = _ALIGN_OTHER_ARM_INTEGRAL_GAIN * (other_ref - qm_other)
+        delta = np.clip(delta, -0.004, 0.004)
+        other_cmd = other_cmd + delta
 
         action = np.zeros(18)
         # Active robot: interpolated arm + gripper
@@ -233,7 +235,7 @@ def hold_dual_pose_steps(
     force_tight_grip_robots=(),
     render_fn=None,
     mj_forward_first=True,
-    arm_integral_gain: float = 0.14,
+    arm_integral_gain: float = 0.06,
 ):
     """Hold both arms near the snapshot pose using integral correction (reduces long-hold sag)."""
     if mj_forward_first:
@@ -264,7 +266,8 @@ def hold_dual_pose_steps(
             for j, addr in enumerate(per_robot_arm_addrs[i]):
                 q = float(env.data.qpos[addr])
                 e = float(locked_ref[i, j]) - q
-                locked[i]["arm"][j] += arm_integral_gain * e
+                d = float(np.clip(arm_integral_gain * e, -0.004, 0.004))
+                locked[i]["arm"][j] += d
         _locked_dict_grip_refresh(env, locked, force_tight_grip_robots)
         env.step(dual_hold_action_from_targets(locked))
         if render_fn is not None:
