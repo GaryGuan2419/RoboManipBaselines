@@ -334,6 +334,8 @@ def main():
     )
 
     dummy_tidyup = None
+    # Last 18-dim env action after a ManiFlow segment — seeds next navigate_to_dual (avoids ctrl=q sag).
+    policy_last_cmd_18 = None
     if not args.skip_policies:
         for ck, name in [(ck_pick, "pick"), (ck_hand, "handover"), (ck_place, "place")]:
             if not os.path.isfile(ck):
@@ -349,7 +351,7 @@ def main():
         # One shared single-robot dummy for pick + handover + place MotionManager (RGB comes from main dual env).
         dummy_tidyup = MujocoHsrTidyupEnv(render_mode="rgb_array")
         pick_ex = ManiFlowExecutor(ck_pick, dummy_tidyup)
-        execute_skill_dual(
+        policy_last_cmd_18 = execute_skill_dual(
             env.unwrapped,
             pick_ex,
             "side_pick",
@@ -373,6 +375,7 @@ def main():
         kp_pos=kp_pos,
         kp_yaw=kp_yaw,
         force_tight_grip_robots=(0,),
+        seed_prev_action_18=policy_last_cmd_18,
     )
 
     # --- B to handover ---
@@ -422,7 +425,7 @@ def main():
 
     if not args.skip_policies:
         hand_ex = ManiFlowExecutorHsrDualHandoverB(ck_hand, dummy_tidyup)
-        execute_handover_b_release_a_when_closed(
+        policy_last_cmd_18 = execute_handover_b_release_a_when_closed(
             env.unwrapped,
             hand_ex,
             "side_handover",
@@ -457,6 +460,7 @@ def main():
             kp_yaw=kp_yaw,
             force_tight_grip_robots=(1,),
             yaw_gate=b_place_nav_yaw_gate,
+            seed_prev_action_18=policy_last_cmd_18,
         )
         mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
         g_xy = env.unwrapped.data.body("target_area").xpos[:2].copy()
@@ -487,6 +491,7 @@ def main():
                 kp_pos=kp_pos,
                 kp_yaw=kp_yaw,
                 force_tight_grip_robots=(1,),
+                seed_prev_action_18=policy_last_cmd_18,
             )
         else:
             navigate_to_dual(
@@ -510,6 +515,7 @@ def main():
             kp_pos=kp_pos,
             kp_yaw=kp_yaw,
             force_tight_grip_robots=(1,),
+            seed_prev_action_18=policy_last_cmd_18,
         )
 
     if not args.skip_policies:
@@ -567,7 +573,7 @@ def main():
         _release_policy_memory()
         print("[Memory] place policy: reusing pick/handover dummy_tidyup (no extra MujocoHsrTidyupPlaceEnv).")
         place_ex = ManiFlowExecutor(ck_place, dummy_tidyup)
-        execute_skill_dual(
+        policy_last_cmd_18 = execute_skill_dual(
             env.unwrapped,
             place_ex,
             "place",

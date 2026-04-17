@@ -103,7 +103,14 @@ def navigate_to_dual(
     lock_arm_to_init=False,
     yaw_gate: float = 0.0,
     post_arrival_hold_steps: int = 8,
+    seed_prev_action_18: np.ndarray | None = None,
 ):
+    """Navigate one robot's mobile base while holding arms.
+
+    If ``seed_prev_action_18`` is the last 18-dim ``env`` action from a ManiFlow skill, arm+grip
+    *commands* start there while ``locked_ref_arm`` stays the measured pose at nav entry. That
+    avoids ``ctrl <- qpos`` (zero PD error → gravity sag) right after a policy segment.
+    """
     robot_name = "A" if robot_index == 0 else "B"
     print(
         f"\n[Navigation] Robot {robot_name} -> "
@@ -167,6 +174,13 @@ def navigate_to_dual(
     for i in (0, 1):
         for j in range(5):
             locked_ref_arm[i, j] = float(locked[i]["arm"][j])
+
+    if seed_prev_action_18 is not None:
+        sa = np.asarray(seed_prev_action_18, dtype=np.float64).reshape(18)
+        for i, off in ((0, 0), (1, 9)):
+            for j in range(5):
+                locked[i]["arm"][j] = float(sa[off + 3 + j])
+            locked[i]["grip"] = float(sa[off + 8])
 
     for step in range(max_steps):
         current_x = env.data.qpos[qpos_adrs[0]]
@@ -258,6 +272,7 @@ def navigate_to_xy_world_line_then_along_x(
     kp_pos=2.0,
     kp_yaw=2.0,
     force_tight_grip_robots=(),
+    seed_prev_action_18: np.ndarray | None = None,
 ):
     """
     Drive to end_xy_world with heading target_yaw, staying on world y = end_xy_world[1].
@@ -286,6 +301,7 @@ def navigate_to_xy_world_line_then_along_x(
             kp_yaw=kp_yaw,
             force_tight_grip_robots=force_tight_grip_robots,
             yaw_gate=yaw_gate,
+            seed_prev_action_18=seed_prev_action_18,
         )
     print(
         f"[Navigation] Robot {robot_name} line approach: along x to "
@@ -474,6 +490,7 @@ def execute_skill_dual(
 
     ck_cams = getattr(planner, "camera_names", None)
     phase_tag = f"{robot_name}_{skill_name}"
+    last_full = np.zeros(18, dtype=np.float64)
     for _step in range(max_steps):
         info = _map_dual_images_to_single(
             env, prefix, cam_mode, policy_camera_names=ck_cams
@@ -500,12 +517,14 @@ def execute_skill_dual(
         full_action[idle_offset + 3 : idle_offset + 8] = idle_arm_cmd
         full_action[idle_offset + 8] = idle_g_cmd
 
+        last_full = full_action.copy()
         obs, _r, _t, _tr, _i = env.step(full_action)
 
     preview_cameras_close()
     print(
         f"[Skill] Robot {robot_name} done. grip_qpos={float(env.data.qpos[grip_addr]):.4f}"
     )
+    return last_full
 
 
 def execute_handover_b_release_a_when_closed(
@@ -561,6 +580,7 @@ def execute_handover_b_release_a_when_closed(
 
     ck_cams = getattr(planner, "camera_names", None)
     phase_tag = f"B_{skill_name}"
+    last_full = np.zeros(18, dtype=np.float64)
     for _step in range(max_steps):
         info = _map_dual_images_to_single(
             env, "robot_b", "handover", policy_camera_names=ck_cams
@@ -596,6 +616,7 @@ def execute_handover_b_release_a_when_closed(
         else:
             full_action[8] = a_open_cmd
 
+        last_full = full_action.copy()
         obs, _r, _t, _tr, _i = env.step(full_action)
         if released:
             print(
@@ -606,3 +627,4 @@ def execute_handover_b_release_a_when_closed(
     if not released:
         print("[Handover] WARNING: A not released (B gripper threshold not met).")
     preview_cameras_close()
+    return last_full
