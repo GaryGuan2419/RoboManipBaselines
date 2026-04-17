@@ -237,7 +237,12 @@ def hold_dual_pose_steps(
     mj_forward_first=True,
     arm_integral_gain: float = 0.06,
 ):
-    """Hold both arms near the snapshot pose using integral correction (reduces long-hold sag)."""
+    """Hold both arms near the snapshot pose using integral correction (reduces long-hold sag).
+
+    Returns:
+        Last 18-dim env action applied (or the initial hold command if ``n_steps == 0``), for seeding
+        the next policy / navigation segment.
+    """
     if mj_forward_first:
         mujoco.mj_forward(env.model, env.data)
     snap = build_dual_hold_targets_from_current(env, force_tight_grip_robots)
@@ -261,6 +266,7 @@ def hold_dual_pose_steps(
         ]
         for pfx in ["robot_a", "robot_b"]
     ]
+    last_act = dual_hold_action_from_targets(locked).copy()
     for _ in range(n_steps):
         for i in (0, 1):
             for j, addr in enumerate(per_robot_arm_addrs[i]):
@@ -269,6 +275,8 @@ def hold_dual_pose_steps(
                 d = float(np.clip(arm_integral_gain * e, -0.004, 0.004))
                 locked[i]["arm"][j] += d
         _locked_dict_grip_refresh(env, locked, force_tight_grip_robots)
-        env.step(dual_hold_action_from_targets(locked))
+        last_act = dual_hold_action_from_targets(locked).copy()
+        env.step(last_act)
         if render_fn is not None:
             render_fn()
+    return last_act

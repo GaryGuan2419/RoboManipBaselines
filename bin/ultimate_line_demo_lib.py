@@ -107,9 +107,12 @@ def navigate_to_dual(
 ):
     """Navigate one robot's mobile base while holding arms.
 
-    If ``seed_prev_action_18`` is the last 18-dim ``env`` action from a ManiFlow skill, arm+grip
-    *commands* start there while ``locked_ref_arm`` stays the measured pose at nav entry. That
-    avoids ``ctrl <- qpos`` (zero PD error → gravity sag) right after a policy segment.
+    If ``seed_prev_action_18`` is set (last 18-dim ``env`` action from policy, another navigate, or
+    hold), arm+grip *commands* start there while ``locked_ref_arm`` stays the measured pose at nav
+    entry — avoids ``ctrl <- qpos`` sag at segment boundaries.
+
+    Returns:
+        (success, last_action_18) — last full action sent to ``env.step`` (including post-arrival hold).
     """
     robot_name = "A" if robot_index == 0 else "B"
     print(
@@ -182,6 +185,8 @@ def navigate_to_dual(
                 locked[i]["arm"][j] = float(sa[off + 3 + j])
             locked[i]["grip"] = float(sa[off + 8])
 
+    last_action = np.zeros(18, dtype=np.float64)
+
     for step in range(max_steps):
         current_x = env.data.qpos[qpos_adrs[0]]
         current_y = env.data.qpos[qpos_adrs[1]]
@@ -215,6 +220,7 @@ def navigate_to_dual(
                 o = locked[i]["offset"]
                 action[o + 3 : o + 8] = locked[i]["arm"]
                 action[o + 8] = locked[i]["grip"]
+            last_action = action.copy()
             env.step(action)
             continue
 
@@ -225,8 +231,9 @@ def navigate_to_dual(
             # lock (reduces end-of-nav sag / jerk).
             snap = build_dual_hold_targets_from_current(env, force_tight_grip_robots)
             for _ in range(max(0, int(post_arrival_hold_steps))):
-                env.step(dual_hold_action_from_targets(snap))
-            return True
+                last_action = dual_hold_action_from_targets(snap)
+                env.step(last_action)
+            return True, last_action
 
         v_x_global = kp_pos * err_x
         v_y_global = kp_pos * err_y
@@ -254,10 +261,11 @@ def navigate_to_dual(
             action[o + 3 : o + 8] = locked[i]["arm"]
             action[o + 8] = locked[i]["grip"]
 
+        last_action = action.copy()
         env.step(action)
 
     print("[Navigation] WARNING: max steps reached.")
-    return False
+    return False, last_action
 
 
 def navigate_to_xy_world_line_then_along_x(
@@ -278,20 +286,26 @@ def navigate_to_xy_world_line_then_along_x(
     Drive to end_xy_world with heading target_yaw, staying on world y = end_xy_world[1].
 
     If the base is off that y line, first move laterally (same x) to the line, then along +/-
-    world X. With yaw ~0 this matches "face +X and move on one straight line" in the
+    world X.     With yaw ~0 this matches "face +X and move on one straight line" in the
     ultimate-line layout (goal/handover on y≈0).
+
+    Returns:
+        (success, last_action_18) — success if both legs succeed; last action from the final leg
+        (or from the lateral leg if the along-x leg is skipped).
     """
     robot_name = "A" if robot_index == 0 else "B"
     end_xy_world = [float(end_xy_world[0]), float(end_xy_world[1])]
     bx, by, _ = robot_base_xy_yaw(env, robot_index)
     ly = end_xy_world[1]
     ex = end_xy_world[0]
+    seed2 = seed_prev_action_18
+    ok_all = True
     if abs(by - ly) > two_phase_threshold:
         print(
             f"[Navigation] Robot {robot_name} line approach: lateral to y={ly:.4f} "
             f"(from by={by:.4f})"
         )
-        navigate_to_dual(
+        ok1, last1 = navigate_to_dual(
             env,
             robot_index,
             [bx, ly],
@@ -301,13 +315,15 @@ def navigate_to_xy_world_line_then_along_x(
             kp_yaw=kp_yaw,
             force_tight_grip_robots=force_tight_grip_robots,
             yaw_gate=yaw_gate,
-            seed_prev_action_18=seed_prev_action_18,
+            seed_prev_action_18=seed2,
         )
+        ok_all = ok_all and ok1
+        seed2 = last1
     print(
         f"[Navigation] Robot {robot_name} line approach: along x to "
         f"({ex:.4f},{ly:.4f}) yaw={target_yaw:.3f}"
     )
-    navigate_to_dual(
+    ok2, last_out = navigate_to_dual(
         env,
         robot_index,
         [ex, ly],
@@ -317,7 +333,9 @@ def navigate_to_xy_world_line_then_along_x(
         kp_yaw=kp_yaw,
         force_tight_grip_robots=force_tight_grip_robots,
         yaw_gate=yaw_gate,
+        seed_prev_action_18=seed2,
     )
+    return ok_all and ok2, last_out
 
 
 def _physical_rgb_source_for_policy_cam(cam_name: str, prefix: str, cam_mode: str) -> str:
@@ -433,6 +451,7 @@ def execute_skill_dual(
     *,
     camera_preview=None,
     freeze_grip_steps: int = 0,
+    seed_prev_action_18: np.ndarray | None = None,
 ):
     robot_name = "A" if robot_index == 0 else "B"
     print(f"\n[Skill] Robot {robot_name} '{skill_name}' ({max_steps} steps)")
@@ -486,7 +505,14 @@ def execute_skill_dual(
 
     # Idle robot: reference pose at skill start + integral correction (reduces sag vs fixed cmd).
     idle_arm_ref = np.array([float(env.data.qpos[addr]) for addr in idle_arm_addrs], dtype=np.float64)
-    idle_arm_cmd = idle_arm_ref.copy()
+    if seed_prev_action_18 is not None:
+        sa0 = np.asarray(seed_prev_action_18, dtype=np.float64).reshape(18)
+        idle_arm_cmd = np.array(
+            [float(sa0[idle_offset + 3 + j]) for j in range(5)],
+            dtype=np.float64,
+        )
+    else:
+        idle_arm_cmd = idle_arm_ref.copy()
 
     ck_cams = getattr(planner, "camera_names", None)
     phase_tag = f"{robot_name}_{skill_name}"
@@ -509,8 +535,12 @@ def execute_skill_dual(
         d_idle = _SKILL_IDLE_ARM_INTEGRAL_GAIN * (idle_arm_ref - q_idle)
         d_idle = np.clip(d_idle, -0.004, 0.004)
         idle_arm_cmd = idle_arm_cmd + d_idle
-        g_idle = float(env.data.qpos[idle_grip_addr])
-        idle_g_cmd = g_idle - 0.1 if g_idle < 0.6 else g_idle
+        if seed_prev_action_18 is not None and _step == 0:
+            sa0 = np.asarray(seed_prev_action_18, dtype=np.float64).reshape(18)
+            idle_g_cmd = float(sa0[idle_offset + 8])
+        else:
+            g_idle = float(env.data.qpos[idle_grip_addr])
+            idle_g_cmd = g_idle - 0.1 if g_idle < 0.6 else g_idle
 
         full_action = np.zeros(18)
         full_action[idx_offset : idx_offset + 9] = single_action
@@ -538,6 +568,7 @@ def execute_handover_b_release_a_when_closed(
     *,
     camera_preview=None,
     freeze_b_base_steps: int = 0,
+    seed_prev_action_18: np.ndarray | None = None,
 ):
     """Run handover policy on robot B; when B gripper qpos is closed enough, open A after dwell."""
     print(
@@ -570,7 +601,11 @@ def execute_handover_b_release_a_when_closed(
     ]
     # Fixed joint targets for A (no outer-loop integral): B's motion + contact otherwise
     # falsely looks like "sag" and pushes A upward.
-    a_arm_hold = np.array([float(env.data.qpos[a]) for a in a_addrs], dtype=np.float64)
+    if seed_prev_action_18 is not None:
+        sa0 = np.asarray(seed_prev_action_18, dtype=np.float64).reshape(18)
+        a_arm_hold = np.array([float(sa0[3 + j]) for j in range(5)], dtype=np.float64)
+    else:
+        a_arm_hold = np.array([float(env.data.qpos[a]) for a in a_addrs], dtype=np.float64)
     b_grip_addr = env.model.jnt_qposadr[
         mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, "robot_b/hand_motor_joint")
     ]
