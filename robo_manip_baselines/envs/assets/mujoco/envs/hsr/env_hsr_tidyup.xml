@@ -13,6 +13,11 @@
 
   <include file="../../robots/hsr/hsr_config.xml"/>
 
+  <keyframe>
+    <!-- qpos (18): base(3), arm(5), gripper(1), mimics(2), bottle2_freejoint(7) -->
+    <key name="init" qpos="-0.176 0 0 0.26 -2.4844 0.0039 1.0132 0.0021 0.8 0.8 0.8 0.44 0.08 0.01 1 0 0 0"/>
+  </keyframe>
+
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true" diffuse="0.3 0.3 0.3"/>
 
@@ -24,29 +29,24 @@
     <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall"/>
 
     <include file="../../robots/hsr/hsr_body.xml"/>
-
-    <body name="bottle1" pos="0.7 0.08 0.01">
-      <freejoint name="bottle1_freejoint"/>
-      <geom type="box" size="0.025 0.025 0.07" pos="0 0 0.07" material="bottle1"/>
-    </body>
-    <body name="bottle2" pos="0.7 -0.08 0.01">
+    <!-- Relay baton: upper half red (A), lower half blue (B); same outer size as before -->
+    <body name="bottle2" pos="0.37 0.08 0.01">
       <freejoint name="bottle2_freejoint"/>
-      <geom type="box" size="0.025 0.025 0.07" pos="0 0 0.07" material="bottle2"/>
+      <geom name="baton_upper" type="box" size="0.025 0.025 0.035" pos="0 0 0.105"
+            rgba="0.95 0.08 0.08 1"
+            condim="4" friction="1.5 0.05 0.005"
+            solimp="0.95 0.99 0.001" solref="0.004 1"/>
+      <geom name="baton_lower" type="box" size="0.025 0.025 0.035" pos="0 0 0.035"
+            rgba="0.08 0.2 0.95 1"
+            condim="4" friction="1.5 0.05 0.005"
+            solimp="0.95 0.99 0.001" solref="0.004 1"/>
     </body>
 
-    <body name="container1" pos="1.0 0.0 0.0">
-      <geom type="box" size="0.1 0.15 0.005" pos="0.0 0.0 0.005" material="container1"/>
-      <geom type="box" size="0.1 0.005 0.06" pos="0.0 0.155 0.06" material="container1"/>
-      <geom type="box" size="0.1 0.005 0.06" pos="0.0 -0.155 0.06" material="container1"/>
-      <geom type="box" size="0.005 0.15 0.06" pos="0.095 0.0 0.06" material="container1"/>
-      <geom type="box" size="0.005 0.15 0.06" pos="-0.095 0.0 0.06" material="container1"/>
-    </body>
-    <body name="container2" pos="1.2 0.0 0.0">
-      <geom type="box" size="0.1 0.15 0.005" pos="0.0 0.0 0.005" material="container2"/>
-      <geom type="box" size="0.1 0.005 0.06" pos="0.0 0.155 0.06" material="container2"/>
-      <geom type="box" size="0.1 0.005 0.06" pos="0.0 -0.155 0.06" material="container2"/>
-      <geom type="box" size="0.005 0.15 0.06" pos="0.095 0.0 0.06" material="container2"/>
-      <geom type="box" size="0.005 0.15 0.06" pos="-0.095 0.0 0.06" material="container2"/>
-    </body>
+    <!-- Observation Cameras -->
+    <!-- side_view: looks from the right side diagonally toward the grasping area -->
+    <camera name="side_view" pos="0.55 -0.7 0.35" xyaxes="1 0 0 0 0.3 1" fovy="65"/>
+    <!-- overhead_view: closer top-down view to see both robot base position and target -->
+    <camera name="overhead_view" pos="0.55 0.08 0.9" xyaxes="0 -1 0 1 0 0" fovy="70"/>
+
   </worldbody>
 </mujoco>

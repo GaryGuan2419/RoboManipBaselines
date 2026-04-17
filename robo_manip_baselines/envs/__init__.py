@@ -100,6 +100,22 @@ register(
     id="robo_manip_baselines/MujocoHsrTidyupEnv-v0",
     entry_point="robo_manip_baselines.envs.mujoco:MujocoHsrTidyupEnv",
 )
+register(
+    id="robo_manip_baselines/MujocoHsrTidyupPlaceEnv-v0",
+    entry_point="robo_manip_baselines.envs.mujoco:MujocoHsrTidyupPlaceEnv",
+)
+register(
+    id="robo_manip_baselines/MujocoHsrBSidePlaceEnv-v0",
+    entry_point="robo_manip_baselines.envs.mujoco:MujocoHsrBSidePlaceEnv",
+)
+register(
+    id="robo_manip_baselines/MujocoDualHsrHandoverReceiveEnv-v0",
+    entry_point="robo_manip_baselines.envs.mujoco:MujocoDualHsrHandoverReceiveEnv",
+)
+register(
+    id="robo_manip_baselines/MujocoDualHsrUltimateLineEnv-v0",
+    entry_point="robo_manip_baselines.envs.mujoco:MujocoDualHsrUltimateLineEnv",
+)
 
 ## G1
 register(

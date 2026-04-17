@@ -92,6 +92,15 @@ class ManiFlowImageDataset(DatasetBase, DpStyleDatasetMixin):
                 camera_idx
             ]
 
+        # Add language instruction if available
+        # Multi-process data loader might not allow passing strings directly if not handled, 
+        # but ManiFlow policy expects a list of strings for language conditioning.
+        with RmbData(self.filenames[episode_idx], self.enable_rmb_cache) as rmb_data:
+            if "task_desc" in rmb_data.attrs:
+                data["obs"]["task_name"] = str(rmb_data.attrs["task_desc"])
+            else:
+                data["obs"]["task_name"] = ""
+
         return data
 
     def augment_data(self, state, action, images):

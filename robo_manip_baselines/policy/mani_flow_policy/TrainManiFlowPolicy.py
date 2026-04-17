@@ -114,6 +114,13 @@ class TrainManiFlowPolicy(TrainBase, TrainPointCloudMixin):
             default=[224, 224],
             help="image size (for image policy)",
         )
+        
+        parser.add_argument(
+            "--language_conditioned",
+            action=argparse.BooleanOptionalAction,
+            default=False,
+            help="Enable language conditioning for the policy",
+        )
 
     def setup_model_meta_info(self):
         super().setup_model_meta_info()
@@ -137,6 +144,7 @@ class TrainManiFlowPolicy(TrainBase, TrainPointCloudMixin):
 
         self.model_meta_info["policy"]["use_ema"] = self.args.use_ema
         self.model_meta_info["policy"]["policy_type"] = self.args.policy_type
+        self.model_meta_info["policy"]["language_conditioned"] = self.args.language_conditioned
 
     def setup_dataset(self):
         if self.args.policy_type == "image":
@@ -209,8 +217,8 @@ class TrainManiFlowPolicy(TrainBase, TrainPointCloudMixin):
             "max_lang_cond_len": 1024,
             "qkv_bias": True,
             "qk_norm": True,
-            "language_conditioned": False,
-            "pre_norm_modality": False,
+            "language_conditioned": self.args.language_conditioned,
+            "pre_norm_modality": self.args.language_conditioned,  # Recommended for lang cond
             "flow_batch_ratio": self.args.flow_batch_ratio,
             "consistency_batch_ratio": 1.0 - self.args.flow_batch_ratio,
             "sample_t_mode_flow": "beta",

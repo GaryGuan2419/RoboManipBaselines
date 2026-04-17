@@ -52,6 +52,13 @@
     </body>
   </worldbody>
 
+  <!-- 排除夹爪内部自碰撞（与 Robosuite 官方 z1_gripper.xml 一致） -->
+  <contact>
+    <exclude name="exclude_stator_mover" body1="stator" body2="mover"/>
+    <!-- 同时排除 gripperMover 与 link06 的自碰撞 -->
+    <exclude name="exclude_gripper_link06" body1="gripperMover" body2="link06"/>
+  </contact>
+
   <!-- Lock the Dingo mobile base for grasping data collection -->
   <equality>
     <weld body1="base_link" />

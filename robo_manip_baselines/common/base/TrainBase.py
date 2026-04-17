@@ -490,18 +490,26 @@ class TrainBase(ABC):
             )  # [GB]
             epoch_summary["best_epoch"] = self.best_ckpt_info["epoch"]
 
+        if len(batch_result_list) == 0:
+            return epoch_summary
+
         for k in batch_result_list[0]:
             epoch_summary[k] = np.mean(
                 [batch_result[k] for batch_result in batch_result_list]
             )
 
-        for k, v in epoch_summary.items():
-            if self.writer is not None:
+        if self.writer is not None:
+            for k, v in epoch_summary.items():
+                if k == "epoch":
+                    continue
                 self.writer.add_scalar(f"{k}/{label}", v, epoch)
 
         return epoch_summary
 
     def update_best_ckpt(self, epoch_summary, policy=None):
+        if self.global_rank != 0:
+            return
+
         if policy is None:
             policy = self.policy
 
@@ -513,6 +521,9 @@ class TrainBase(ABC):
             }
 
     def save_current_ckpt(self, ckpt_suffix, policy=None):
+        if self.global_rank != 0:
+            return
+
         if policy is None:
             policy = self.policy
 
@@ -520,6 +531,9 @@ class TrainBase(ABC):
         torch.save(policy.state_dict(), ckpt_path)
 
     def save_best_ckpt(self):
+        if self.global_rank != 0 or "state_dict" not in self.best_ckpt_info:
+            return
+
         ckpt_path = os.path.join(self.args.checkpoint_dir, "policy_best.ckpt")
         torch.save(self.best_ckpt_info["state_dict"], ckpt_path)
         print(

@@ -87,6 +87,16 @@ class ArmManager(BodyManagerBase):
 
         self.target_se3 = self._original_target_se3.copy()
 
+    def sync_with_obs(self, obs):
+        """Synchronize the internal target state with the actual observed state."""
+        measured_joint_pos = self.env.unwrapped.get_joint_pos_from_obs(obs)
+        self.arm_joint_pos = measured_joint_pos[self.body_config.arm_joint_idxes].copy()
+        self.gripper_joint_pos = measured_joint_pos[
+            self.body_config.gripper_joint_idxes
+        ].copy()
+        self.forward_kinematics()
+        self.target_se3 = self.current_se3.copy()
+
     def set_command_data(self, key, command, is_skip=False):
         if key == DataKey.COMMAND_JOINT_POS:
             self.set_command_joint_pos(

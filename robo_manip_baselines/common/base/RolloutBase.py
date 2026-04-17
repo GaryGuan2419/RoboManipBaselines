@@ -395,9 +395,43 @@ class RolloutBase(OperationDataMixin, ABC):
         cv2.waitKey(1)
 
         if len(self.action_keys) > 0:
-            self.action_plot_scale = np.concatenate(
-                [DataKey.get_plot_scale(key, self.env) for key in self.action_keys]
-            )
+            if getattr(self.env.unwrapped, "_rollout_split_arm_gripper_action", False):
+                # Policy vector is mobile(3)+arm(5)+grip(1); plot scales must match len 9.
+                from ..body.ArmManager import ArmConfig
+
+                exp = (
+                    DataKey.COMMAND_MOBILE_OMNI_VEL,
+                    DataKey.COMMAND_JOINT_POS,
+                    DataKey.COMMAND_GRIPPER_JOINT_POS,
+                )
+                if tuple(self.action_keys) != exp:
+                    raise ValueError(
+                        f"[{self.__class__.__name__}] _rollout_split_arm_gripper_action "
+                        f"expects action_keys {exp}, got {self.action_keys}"
+                    )
+                n_arm = sum(
+                    len(bc.arm_joint_idxes)
+                    for bc in self.env.unwrapped.body_config_list
+                    if isinstance(bc, ArmConfig)
+                )
+                joint_scale = DataKey.get_plot_scale(
+                    DataKey.COMMAND_JOINT_POS, self.env
+                )
+                self.action_plot_scale = np.concatenate(
+                    [
+                        DataKey.get_plot_scale(
+                            DataKey.COMMAND_MOBILE_OMNI_VEL, self.env
+                        ),
+                        joint_scale[:n_arm],
+                        DataKey.get_plot_scale(
+                            DataKey.COMMAND_GRIPPER_JOINT_POS, self.env
+                        ),
+                    ]
+                )
+            else:
+                self.action_plot_scale = np.concatenate(
+                    [DataKey.get_plot_scale(key, self.env) for key in self.action_keys]
+                )
         else:
             self.action_plot_scale = np.zeros(0)
 
@@ -443,12 +477,15 @@ class RolloutBase(OperationDataMixin, ABC):
 
             self.phase_manager.pre_update()
 
-            env_action = np.concatenate(
-                [
-                    self.motion_manager.get_command_data(key)
-                    for key in self.env.unwrapped.command_keys_for_step
-                ]
-            )
+            if hasattr(self.env.unwrapped, "wrap_rollout_action"):
+                env_action = self.env.unwrapped.wrap_rollout_action(self.motion_manager)
+            else:
+                env_action = np.concatenate(
+                    [
+                        self.motion_manager.get_command_data(key)
+                        for key in self.env.unwrapped.command_keys_for_step
+                    ]
+                )
 
             if self.args.save_rollout and self.phase_manager.is_phase("RolloutPhase"):
                 self.record_data()
@@ -501,6 +538,12 @@ class RolloutBase(OperationDataMixin, ABC):
         world_idx = self.args.world_idx_list[self.data_manager.episode_idx]
         self.data_manager.setup_env_world(world_idx)
         self.obs, self.info = self.env.reset(seed=self.args.seed)
+        # Some envs (e.g. MujocoHsrBSidePlaceEnv) need a short post-reset sim so baton/gripper
+        # contacts settle; teleop collection does this implicitly before recording.
+        _hook = getattr(self.env.unwrapped, "after_rollout_reset", None)
+        if callable(_hook):
+            self.obs, self.info = _hook()
+
         self.reward = 0
         msg = f"[{self.__class__.__name__}] Reset environment. demo_name: {self.demo_name}, world_idx: {self.data_manager.world_idx}, episode_idx: {self.data_manager.episode_idx}"
         if self.require_task_desc:
@@ -555,6 +598,34 @@ class RolloutBase(OperationDataMixin, ABC):
             action_keys = self.action_keys
 
         is_skip = self.rollout_time_idx % self.args.skip != 0
+
+        # Handover receive: checkpoint action is [mobile_3, arm_5, grip_1] but ArmManager
+        # COMMAND_JOINT_POS expects a 6-vector (arm indices + gripper index).
+        if getattr(self.env.unwrapped, "_rollout_split_arm_gripper_action", False):
+            pa = self.policy_action
+            exp = (
+                DataKey.COMMAND_MOBILE_OMNI_VEL,
+                DataKey.COMMAND_JOINT_POS,
+                DataKey.COMMAND_GRIPPER_JOINT_POS,
+            )
+            if tuple(action_keys) != exp or len(pa) < 9:
+                raise ValueError(
+                    f"[{self.__class__.__name__}] _rollout_split_arm_gripper_action requires "
+                    f"action_keys {exp} and policy_action len>=9, got keys={action_keys} len={len(pa)}"
+                )
+            self.motion_manager.set_command_data(
+                DataKey.COMMAND_MOBILE_OMNI_VEL, pa[0:3], is_skip
+            )
+            self.motion_manager.set_command_data(
+                DataKey.COMMAND_JOINT_POS,
+                np.concatenate([pa[3:8], pa[8:9]]),
+                is_skip,
+            )
+            self.motion_manager.set_command_data(
+                DataKey.COMMAND_GRIPPER_JOINT_POS, pa[8:9], is_skip
+            )
+            return
+
         action_idx = 0
         for key in action_keys:
             action_dim = DataKey.get_dim(key, self.env)

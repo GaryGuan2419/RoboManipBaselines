@@ -5,6 +5,10 @@ class BodyManagerBase:
         self.env = env
         self.body_config = body_config
 
+    def sync_with_obs(self, obs):
+        """Synchronize the internal target state with the actual observed state. Override if needed."""
+        pass
+
 
 class BodyConfigBase:
     """Configuration  for each body component (e.g., single arm, mobile base)."""

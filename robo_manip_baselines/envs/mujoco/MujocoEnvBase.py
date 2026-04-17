@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
 import mujoco
-import glfw
 import numpy as np
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.envs.mujoco.mujoco_rendering import OffScreenViewer
@@ -10,7 +9,7 @@ from robo_manip_baselines.common import ArmConfig, DataKey, EnvDataMixin
 
 
 class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
-    sim_timestep = 0.002
+    sim_timestep = 0.004
     frame_skip = 8
     metadata = {
         "render_modes": [
@@ -41,7 +40,6 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
         self.mujoco_renderer.height = None
 
         self.world_random_scale = None
-        self._render_count = 0  # [HACK FOR CPU PERFORMANCE]
 
         self.setup_robot(init_qpos)
         self.setup_camera()
@@ -61,7 +59,7 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
             camera["name"] = camera_name
             camera["id"] = camera_id
             camera["viewer"] = OffScreenViewer(
-                self.model, self.data, width=160, height=120
+                self.model, self.data, width=640, height=480
             )
             # Because "/" are not allowed in HDF5 keys, replace "/" with "_" in dictionary keys
             self.cameras[camera_name.replace("/", "_")] = camera
@@ -93,15 +91,7 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
             if self._first_render:
                 self._first_render = False
                 self.mujoco_renderer.viewer._hide_menu = True
-                
-            # [HACK FOR CPU PERFORMANCE] Throttle rendering but keep polling events
-            self._render_count += 1
-            if self._render_count % 15 == 0:
-                self.render()
-            else:
-                if hasattr(self.mujoco_renderer, "viewer") and hasattr(self.mujoco_renderer.viewer, "window"):
-                    if self.mujoco_renderer.viewer.window:
-                        glfw.poll_events()
+            self.render()
 
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
         return obs, reward, terminated, False, info
@@ -110,18 +100,10 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
     def _get_obs(self):
         pass
 
-    def get_images(self):
-        """Render all offscreen cameras on demand."""
-        # [HACK FOR CPU PERFORMANCE] Disable all offscreen rendering
-        return {"rgb_images": {}, "depth_images": {}}
-
     def _get_info(self):
-        return self.get_images()
-        
         info = {}
 
-        # If no cameras or specifically in headless mode without render_mode, skip rendering to save time/avoid hangs
-        if len(self.camera_names) == 0 or self.render_mode is None:
+        if len(self.camera_names) == 0:
             return info
 
         # Set camera images
@@ -136,7 +118,6 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
             depth_image = camera["viewer"].render(
                 render_mode="depth_array", camera_id=camera["id"]
             )
-            
             # See https://github.com/google-deepmind/mujoco/blob/631b16e7ad192df936195658fe79f2ada85f755c/python/mujoco/renderer.py#L170-L178
             extent = self.model.stat.extent
             near = self.model.vis.map.znear * extent
@@ -181,19 +162,24 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
 
     def reset_model(self):
         self.set_state(self.init_qpos, self.init_qvel)
+        # Synchronize control targets with initial positions to avoid
+        # the actuator overcorrecting from its default-zero ctrl target.
+        # This prevents the "initial jerk" at simulation startup.
+        self.data.ctrl[:] = self.init_qpos[:len(self.data.ctrl)]
         return self._get_obs()
 
     def close(self):
         for camera in self.cameras.values():
-            camera["viewer"].close()
-        
-        # Prevent AttributeError if renderer/viewer wasn't initialized in headless mode
-        if hasattr(self, "mujoco_renderer") and self.mujoco_renderer is not None:
-            if hasattr(self.mujoco_renderer, "viewer") and self.mujoco_renderer.viewer is None:
-                # If viewer is None, calling MujocoEnv.close might fail in some Gymnasium versions
-                return
-        
-        MujocoEnv.close(self)
+            v = camera.get("viewer")
+            if v is not None:
+                v.close()
+        try:
+            MujocoEnv.close(self)
+        except AttributeError as e:
+            # gymnasium MuJoCo: with render_mode rgb_array, mujoco_renderer.viewer may be None
+            # but mujoco_rendering.close() still calls viewer.close() (Gymnasium >= 0.29).
+            if "'NoneType' object has no attribute 'close'" not in str(e):
+                raise
 
     def get_joint_pos_from_obs(self, obs):
         """Get joint position from observation."""
@@ -266,20 +252,11 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
 
     def draw_box_marker(self, pos, mat, size, rgba):
         """Draw box marker."""
-        if hasattr(self.mujoco_renderer.viewer, "add_marker"):
-            self.mujoco_renderer.viewer.add_marker(
-                pos=pos,
-                mat=mat,
-                label="",
-                type=mujoco.mjtGeom.mjGEOM_BOX,
-                size=size,
-                rgba=rgba,
-            )
-
-    def clear_markers(self):
-        """Clear markers from the viewer."""
-        if hasattr(self.mujoco_renderer.viewer, "_markers"):
-            self.mujoco_renderer.viewer._markers = []
-        elif hasattr(self.mujoco_renderer.viewer, "user_geoms"):
-            # Some viewers use user_geoms
-            pass
+        self.mujoco_renderer.viewer.add_marker(
+            pos=pos,
+            mat=mat,
+            label="",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            size=size,
+            rgba=rgba,
+        )

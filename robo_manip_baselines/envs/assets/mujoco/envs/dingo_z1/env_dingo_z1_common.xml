@@ -1,6 +1,6 @@
 <mujoco model="dingo_z1_common">
   <compiler meshdir="../../robots/dingo_z1/meshes" texturedir="../../assets/textures" angle="radian"/>
-  <option timestep="0.002" integrator="implicitfast" cone="elliptic" impratio="10"/>
+  <option timestep="0.002" integrator="implicitfast" cone="elliptic" impratio="100"/>
   <size memory="2M"/>
   <statistic extent="2.5"/>
 

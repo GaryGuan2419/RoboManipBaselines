@@ -17,37 +17,59 @@ class MujocoHsrTidyupEnv(MujocoHsrEnvBase):
                 path.dirname(__file__),
                 "../../assets/mujoco/envs/hsr/env_hsr_tidyup.xml",
             ),
-            np.array([0.0] * 3 + [0.25, -2.0, 0.0, -1.0, 0.0, 0.8]),
+            # arm_lift 抬高：初始末端更高，便于演示/采样「下探→夹紧→抬起」
+            np.array(
+                [
+                    -0.1760,
+                    0.0000,
+                    0.0000,
+                    0.2600,
+                    -2.4844,
+                    0.0039,
+                    1.0132,
+                    0.0021,
+                    0.8000,
+                ]
+            ),
             **kwargs,
         )
 
-        self.original_bottle1_pos = self.model.body("bottle1").pos.copy()
-        self.original_bottle2_pos = self.model.body("bottle2").pos.copy()
-        self.bottle_pos_offsets = np.array(
-            [
-                [0.0, -0.06, 0.0],
-                [0.0, -0.03, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 0.03, 0.0],
-                [0.0, 0.06, 0.0],
-                [0.0, 0.09, 0.0],
-            ]
-        )  # [m]
+        self.bottle_names = []
+        for name in ["bottle1", "bottle2"]:
+            try:
+                self.model.body(name)
+                self.bottle_names.append(name)
+            except KeyError:
+                pass
+
+        if "bottle1" in self.bottle_names:
+            self.original_bottle1_pos = self.model.body("bottle1").pos.copy()
+        if "bottle2" in self.bottle_names:
+            self.original_bottle2_pos = self.model.body("bottle2").pos.copy()
+
+        self.bottle_pos_offsets = np.zeros((1, 3))  # [m] No offset
 
         self.target_task = None  # One of [None, "either", "both"]
 
     def _get_reward(self):
-        bottle1_pos = self.data.body("bottle1").xpos.copy()
-        bottle2_pos = self.data.body("bottle2").xpos.copy()
-        container1_pos = self.data.body("container1").xpos.copy()
-        container2_pos = self.data.body("container2").xpos.copy()
+        reward = 0.0
         container_half_extents = np.array([0.1, 0.15, 0.08])  # [m]
 
-        reward = 0.0
-        if np.all(np.abs(bottle1_pos - container1_pos) <= container_half_extents):
-            reward += 0.5
-        if np.all(np.abs(bottle2_pos - container2_pos) <= container_half_extents):
-            reward += 0.5
+        try:
+            bottle1_pos = self.data.body("bottle1").xpos.copy()
+            container1_pos = self.data.body("container1").xpos.copy()
+            if np.all(np.abs(bottle1_pos - container1_pos) <= container_half_extents):
+                reward += 0.5
+        except KeyError:
+            pass
+
+        try:
+            bottle2_pos = self.data.body("bottle2").xpos.copy()
+            container2_pos = self.data.body("container2").xpos.copy()
+            if np.all(np.abs(bottle2_pos - container2_pos) <= container_half_extents):
+                reward += 0.5
+        except KeyError:
+            pass
 
         if self.target_task == "either":
             reward = np.min([2.0 * reward, 1.0])
@@ -64,7 +86,7 @@ class MujocoHsrTidyupEnv(MujocoHsrEnvBase):
                 low=-1.0 * self.world_random_scale, high=self.world_random_scale, size=3
             )
 
-        for bottle_name in ["bottle1", "bottle2"]:
+        for bottle_name in self.bottle_names:
             bottle_joint_id = mujoco.mj_name2id(
                 self.model, mujoco.mjtObj.mjOBJ_JOINT, f"{bottle_name}_freejoint"
             )

@@ -22,6 +22,11 @@ class MotionManager:
         for body_manager in self.body_manager_list:
             body_manager.reset()
 
+    def sync_with_obs(self, obs):
+        """Synchronize all body managers with the actual observed state."""
+        for body_manager in self.body_manager_list:
+            body_manager.sync_with_obs(obs)
+
     def set_command_data(self, key, command, is_skip=False):
         """Sets command data of the specified key."""
 

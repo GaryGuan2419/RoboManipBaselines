@@ -26,6 +26,10 @@ from .aloha.MujocoAlohaCableEnv import MujocoAlohaCableEnv
 from .aloha.MujocoAlohaHandoverEnv import MujocoAlohaHandoverEnv
 
 from .hsr.MujocoHsrTidyupEnv import MujocoHsrTidyupEnv
+from .hsr.MujocoHsrTidyupPlaceEnv import MujocoHsrTidyupPlaceEnv
+from .hsr.MujocoHsrBSidePlaceEnv import MujocoHsrBSidePlaceEnv
+from .hsr.MujocoDualHsrHandoverReceiveEnv import MujocoDualHsrHandoverReceiveEnv
+from .hsr.MujocoDualHsrUltimateLineEnv import MujocoDualHsrUltimateLineEnv
 
 from .g1.MujocoG1BottlesEnv import MujocoG1BottlesEnv
 

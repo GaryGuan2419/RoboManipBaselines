@@ -50,7 +50,7 @@
               friction="1.0 0.05 0.001" condim="6" 
               solref="0.01 1" solimp="0.95 0.99 0.001" priority="1" margin="0.002"/>
         <default class="robot_a_z1_gripper_stator_collision">
-          <geom pos="0.051 0 0" type="mesh"/>
+          <geom pos="0.051 0 0" type="mesh" contype="0" conaffinity="1"/>
         </default>
         <default class="robot_a_z1_gripper_stator_pad_collision_1">
           <geom type="box" size="0.014 0.015 0.004" pos="0.186 -0.015 -0.0125"
@@ -67,7 +67,7 @@
                 contype="1" conaffinity="1"/>
         </default>
         <default class="robot_a_z1_gripper_mover_collision">
-          <geom type="mesh"/>
+          <geom type="mesh" contype="0" conaffinity="1"/>
         </default>
         <default class="robot_a_z1_gripper_mover_pad_collision_1">
           <geom type="box" size="0.014 0.015 0.004" pos="0.086 -0.015 -0.0055"
@@ -108,7 +108,7 @@
               friction="1.0 0.05 0.001" condim="6" 
               solref="0.01 1" solimp="0.95 0.99 0.001" priority="1" margin="0.002"/>
         <default class="robot_b_z1_gripper_stator_collision">
-          <geom pos="0.051 0 0" type="mesh"/>
+          <geom pos="0.051 0 0" type="mesh" contype="0" conaffinity="1"/>
         </default>
         <default class="robot_b_z1_gripper_stator_pad_collision_1">
           <geom type="box" size="0.014 0.015 0.004" pos="0.186 -0.015 -0.0125"
@@ -125,7 +125,7 @@
                 contype="1" conaffinity="1"/>
         </default>
         <default class="robot_b_z1_gripper_mover_collision">
-          <geom type="mesh"/>
+          <geom type="mesh" contype="0" conaffinity="1"/>
         </default>
         <default class="robot_b_z1_gripper_mover_pad_collision_1">
           <geom type="box" size="0.014 0.015 0.004" pos="0.086 -0.015 -0.0055"
@@ -470,12 +470,14 @@
          robot qpos indices come first (robot_a: 0-15, robot_b: 16-31,
          object: 32-38)
          ============================================================ -->
-    <!-- Graspable object (Square box standing upright on table) -->
+    <!-- Graspable object: 16-prism mesh, optimized for stable grasping -->
     <body name="object" pos="-1.1 0.0 0.40">
       <freejoint name="object_freejoint"/>
-      <!-- condim=4 + 更高摩擦，减少与夹爪接触时的滑动 -->
-      <geom type="box" size="0.02 0.02 0.04" material="cube_mat" mass="0.2"
-            friction="1.5 0.05 0.001" condim="4"/>
+      <!-- condim=4 激活扭转摩擦；friction第2项(0.3)=扭转摩擦、第3项(0.1)=滚动摩擦，防止轴向自转脱落 -->
+      <!-- solimp 高刚性让物体表面更硬，夹爪接触时产生明确接触面而非线接触 -->
+      <geom type="mesh" mesh="prism_16" material="cube_mat" mass="0.2"
+            friction="1.5 0.3 0.1" condim="4"
+            solimp="0.998 0.998 0.001" solref="0.001 1"/>
     </body>
   </worldbody>
 
@@ -492,7 +494,7 @@
     <general class="robot_a_z1" name="robot_a/motor4" joint="robot_a/joint4" ctrlrange="-1.51844 1.51844"/>
     <general class="robot_a_z1" name="robot_a/motor5" joint="robot_a/joint5" ctrlrange="-1.3439 1.3439"/>
     <general class="robot_a_z1" name="robot_a/motor6" joint="robot_a/joint6" ctrlrange="-2.79253 2.79253"/>
-    <general class="robot_a_z1" name="robot_a/motorGripper" joint="robot_a/jointGripper" ctrlrange="-1.51844 0" gainprm="500" biasprm="0 -500 -50"/>
+    <general class="robot_a_z1" name="robot_a/motorGripper" joint="robot_a/jointGripper" ctrlrange="-1.51844 0" gainprm="800" biasprm="0 -800 -80" forcerange="-200 200"/>
 
     <!-- Robot B actuators -->
     <velocity name="robot_b/left_motor" joint="robot_b/left_wheel" kv="100" ctrlrange="-10 10" forcerange="-20 20"/>
@@ -503,7 +505,7 @@
     <general class="robot_b_z1" name="robot_b/motor4" joint="robot_b/joint4" ctrlrange="-1.51844 1.51844"/>
     <general class="robot_b_z1" name="robot_b/motor5" joint="robot_b/joint5" ctrlrange="-1.3439 1.3439"/>
     <general class="robot_b_z1" name="robot_b/motor6" joint="robot_b/joint6" ctrlrange="-2.79253 2.79253"/>
-    <general class="robot_b_z1" name="robot_b/motorGripper" joint="robot_b/jointGripper" ctrlrange="-1.51844 0" gainprm="500" biasprm="0 -500 -50"/>
+    <general class="robot_b_z1" name="robot_b/motorGripper" joint="robot_b/jointGripper" ctrlrange="-1.51844 0" gainprm="800" biasprm="0 -800 -80" forcerange="-200 200"/>
   </actuator>
 
   <sensor>

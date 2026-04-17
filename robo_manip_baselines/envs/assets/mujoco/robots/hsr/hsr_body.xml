@@ -58,7 +58,7 @@
             <body name="head_rgbd_sensor_link" pos="-0.079796 0.022 0.215172" quat="0.5 -0.5 0.5 -0.5">
               <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
               <geom type="mesh" mesh="xtion" material="hsr_black" />
-              <camera name="head" fovy="62" pos="0 0 0.08" euler="2.35619 0 0"/>
+              <camera name="head" fovy="62" pos="0 0 0.1" euler="2 0 0"/>
               <body name="head_rgbd_sensor_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
                 <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
               </body>
@@ -115,9 +115,9 @@
                               <!-- <joint name="hand_l_distal_joint" pos="0 0 0" axis="1 0 0" range="-1.24 0.798" actuatorfrcrange="-100 100" damping="0.0001" /> -->
                               <geom class="visual" type="mesh" mesh="l_distal" material="hsr_black" />
                               <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.03"
-                                    friction="0.7" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                                    friction="0.7 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
                               <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.015"
-                                    friction="0.6" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                                    friction="0.6 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
                               <body name="hand_l_finger_tip_frame" pos="0.01675 0.01865 0.04289" quat="0.707107 -0.707107 0 0">
                                 <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
                               </body>
@@ -143,9 +143,9 @@
                               <!-- <joint name="hand_r_distal_joint" pos="0 0 0" axis="-1 0 0" range="-1.24 0.798" actuatorfrcrange="-100 100" damping="0.0001" /> -->
                               <geom class="visual" type="mesh" mesh="r_distal" material="hsr_black" />
                               <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.03"
-                                    friction="0.7" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                                    friction="0.7 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
                               <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.015"
-                                    friction="0.6" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                                    friction="0.6 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
                               <body name="hand_r_finger_tip_frame" pos="0.01675 -0.01865 0.04289" quat="0.707107 0.707107 0 0">
                                 <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
                               </body>
@@ -154,7 +154,7 @@
                         </body>
                       </body>
                       <body name="hand_camera_frame" pos="0.039 0 -0.0045">
-                        <camera name="hand" fovy="62" pos="0 0 0" euler="0 3.1415 1.57"/>
+                        <camera name="hand" fovy="80" pos="-0.02 0 0" euler="0 3.1415 1.57"/>
                         <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
                         <body name="hand_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
                           <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />

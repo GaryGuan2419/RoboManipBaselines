@@ -20,10 +20,10 @@ from ..MujocoEnvBase import MujocoEnvBase
 
 class MujocoHsrEnvBase(MujocoEnvBase):
     default_camera_config = {
-        "azimuth": -135.0,
-        "elevation": -45.0,
-        "distance": 1.8,
-        "lookat": [0.5, 0.0, 0.2],
+        "azimuth": -120.0,
+        "elevation": -25.0,
+        "distance": 1.2,
+        "lookat": [0.55, 0.08, 0.1],
     }
     observation_space = Dict(
         {
@@ -80,6 +80,15 @@ class MujocoHsrEnvBase(MujocoEnvBase):
                     **{**default_kwargs.get(1, {}), **overwrite_kwargs.get(1, {})},
                 ),
             ]
+        elif input_device_name == "keyboard":
+            from robo_manip_baselines.teleop.GlfwKeyboardHsrInputDevice import GlfwKeyboardHsrInputDevice
+            return [
+                GlfwKeyboardHsrInputDevice(
+                    motion_manager.body_manager_list[0],
+                    motion_manager.body_manager_list[1],
+                    **{**default_kwargs.get(0, {}), **overwrite_kwargs.get(0, {})},
+                ),
+            ]
         else:
             raise ValueError(
                 f"[{self.__class__.__name__}] Invalid input device key: {input_device_name}"
@@ -88,8 +97,18 @@ class MujocoHsrEnvBase(MujocoEnvBase):
     def get_input_device_kwargs(self, input_device_name):
         if input_device_name == "spacemouse":
             return {0: {"gripper_scale": 0.05}, 1: {}}
+        elif input_device_name == "keyboard":
+            return {
+                0: {
+                    # 5 mm per update is easier for precise final approach than 20 mm.
+                    "pos_scale": 5e-3,
+                    "gripper_scale": 0.05,
+                    "mobile_x_scale": 0.25,
+                    "mobile_y_scale": 0.25,
+                }
+            }
         else:
-            return super().get_input_device_kwargs(input_device_name)
+            return {}
 
     @property
     def command_keys_for_step(self):
@@ -116,9 +135,105 @@ class MujocoHsrEnvBase(MujocoEnvBase):
         ]
 
     def step(self, action):
-        action[0:3] = self.convert_mobile_vel_frame(action[0:3], world_to_local=False)
+        # Performance: MujocoEnvBase.step() calls `_get_info()` which renders RGB+Depth
+        # for *all* offscreen cameras every simulation step. This makes keyboard teleop
+        # feel "discrete" (low control update rate) and causes severe stutter.
+        #
+        # We skip camera rendering here and only render images on-demand via `get_images()`
+        # (TeleopBase already re-fetches images right before recording/display).
+        action_copy = np.asarray(action, dtype=np.float64).copy()
+        action_copy[0:3] = self.convert_mobile_vel_frame(
+            action_copy[0:3], world_to_local=False
+        )
 
-        return super().step(action)
+        self.do_simulation(action_copy, self.frame_skip)
+
+        obs = self._get_obs()
+        reward = self._get_reward()
+        terminated = False
+        info = {}  # skip expensive camera rendering
+
+        if self.render_mode == "human":
+            # Keep the interactive viewer responsive (rendering the viewport only).
+            if self._first_render:
+                self._first_render = False
+                self.mujoco_renderer.viewer._hide_menu = True
+            self.render()
+
+        # truncation=False as the time limit is handled by TimeLimit wrapper.
+        return obs, reward, terminated, False, info
+
+    def get_images(self):
+        """Render all offscreen cameras on demand. Called during policy evaluation."""
+        return self._get_info()
+
+    def print_joint_state(self):
+        """Print robot base pose, joint values, and key body poses."""
+        arm_joint_names = [
+            "arm_lift_joint",
+            "arm_flex_joint",
+            "arm_roll_joint",
+            "wrist_flex_joint",
+            "wrist_roll_joint",
+        ]
+        base_joint_names = ["mobile_x_joint", "mobile_y_joint", "mobile_theta_joint"]
+        gripper_joint_names = [
+            "hand_motor_joint",
+            "hand_l_proximal_joint",
+            "hand_r_proximal_joint",
+        ]
+
+        base = [self.data.joint(jn).qpos[0] for jn in base_joint_names]
+        arm = [self.data.joint(jn).qpos[0] for jn in arm_joint_names]
+        grip = [self.data.joint(jn).qpos[0] for jn in gripper_joint_names]
+
+        palm_pose = self.get_body_pose("hand_palm_link")
+        left_tip_pose = self.get_body_pose("hand_l_finger_tip_frame")
+        right_tip_pose = self.get_body_pose("hand_r_finger_tip_frame")
+
+        print(f"\n{'=' * 72}")
+        print("[HSR] Current robot state")
+        print(
+            f"  base (x, y, theta): [{base[0]: .4f}, {base[1]: .4f}, {base[2]: .4f}]"
+        )
+        print(
+            "  arm joints [lift, flex, roll, wrist_flex, wrist_roll]: "
+            f"[{', '.join(f'{v:.4f}' for v in arm)}]"
+        )
+        print(
+            "  gripper joints [motor, left_proximal, right_proximal]: "
+            f"[{', '.join(f'{v:.4f}' for v in grip)}]"
+        )
+        print(
+            "  hand_palm pose [x, y, z, qw, qx, qy, qz]: "
+            f"[{', '.join(f'{v:.4f}' for v in palm_pose)}]"
+        )
+        print(
+            "  left_tip xyz: "
+            f"[{left_tip_pose[0]:.4f}, {left_tip_pose[1]:.4f}, {left_tip_pose[2]:.4f}]"
+        )
+        print(
+            "  right_tip xyz: "
+            f"[{right_tip_pose[0]:.4f}, {right_tip_pose[1]:.4f}, {right_tip_pose[2]:.4f}]"
+        )
+
+        for obj_name in ("bottle1", "bottle2"):
+            try:
+                obj_pose = self.get_body_pose(obj_name)
+                print(
+                    f"  {obj_name} pose [x, y, z, qw, qx, qy, qz]: "
+                    f"[{', '.join(f'{v:.4f}' for v in obj_pose)}]"
+                )
+            except KeyError:
+                pass
+
+        # Copy-paste helper for single-HSR init_qpos (without external objects).
+        init_qpos_single_hsr = base + arm + [grip[0]]
+        print(
+            "  init_qpos (single HSR, 9 dims = base3 + arm5 + hand_motor):\n"
+            f"    np.array([{', '.join(f'{v:.4f}' for v in init_qpos_single_hsr)}])"
+        )
+        print(f"{'=' * 72}")
 
     def _get_obs(self):
         arm_joint_name_list = [

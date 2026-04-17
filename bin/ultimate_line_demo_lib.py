@@ -416,6 +416,7 @@ def execute_skill_dual(
     max_steps=60,
     *,
     camera_preview=None,
+    freeze_grip_steps: int = 0,
 ):
     robot_name = "A" if robot_index == 0 else "B"
     print(f"\n[Skill] Robot {robot_name} '{skill_name}' ({max_steps} steps)")
@@ -432,6 +433,19 @@ def execute_skill_dual(
     _print_checkpoint_camera_routing(planner, prefix, cam_mode)
     planner.reset_buffers()
 
+    grip_addr = env.model.jnt_qposadr[
+        mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{prefix}/hand_motor_joint")
+    ]
+    freeze_g_cmd = None
+    if freeze_grip_steps > 0:
+        # Same tight-grip convention as hold_dual_pose_steps(force_tight_grip_robots=...).
+        g0 = float(env.data.qpos[grip_addr])
+        freeze_g_cmd = float(min(g0 - 0.18, _TIGHT_GRIP_CMD))
+        print(
+            f"[Skill] First {freeze_grip_steps} steps: grip cmd frozen at {freeze_g_cmd:.4f} "
+            f"(qpos0={g0:.4f}; suppresses policy open-spike)."
+        )
+
     arm_joint_names = [
         "arm_lift_joint",
         "arm_flex_joint",
@@ -440,9 +454,6 @@ def execute_skill_dual(
         "wrist_roll_joint",
     ]
     idx_offset = robot_index * 9
-    grip_addr = env.model.jnt_qposadr[
-        mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{prefix}/hand_motor_joint")
-    ]
 
     idle_idx = 1 - robot_index
     idle_prefix = "robot_b" if robot_index == 0 else "robot_a"
@@ -473,6 +484,9 @@ def execute_skill_dual(
             "mobile_vel": obs[f"{prefix}/mobile_vel"],
         }
         single_action = planner.get_action(single_obs, info)
+        if freeze_grip_steps > 0 and _step < freeze_grip_steps and freeze_g_cmd is not None:
+            single_action = np.array(single_action, dtype=np.float64, copy=True)
+            single_action[8] = freeze_g_cmd
 
         q_idle = np.array([float(env.data.qpos[addr]) for addr in idle_arm_addrs], dtype=np.float64)
         d_idle = _SKILL_IDLE_ARM_INTEGRAL_GAIN * (idle_arm_ref - q_idle)

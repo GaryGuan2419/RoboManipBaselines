@@ -119,28 +119,60 @@
                           <camera name="wrist" pos="0.08 0 0.05" quat="0.5 0.5 0.5 0.5" fovy="60" />
                         
                         
-                        <geom pos="0.051 0 0" type="mesh" mesh="z1_GripperStator" />
-                        <geom mesh="z1_GripperStator_col_1" />
-                        <geom mesh="z1_GripperStator_col_2" />
-                        <geom mesh="z1_GripperStator_col_3" />
-                        <geom mesh="z1_GripperStator_col_4" />
-                        <geom mesh="z1_GripperStator_col_5" />
-                        <geom mesh="z1_GripperStator_col_6" />
-                        <geom />
-                        <geom />
+                        <geom pos="0.051 0 0" type="mesh" mesh="z1_GripperStator" contype="0" conaffinity="0" />
+                        <!-- Stator structural mesh collision (passive, contype=0 防止主动触碰) -->
+                        <geom mesh="z1_GripperStator_col_1" contype="0" conaffinity="1" />
+                        <geom mesh="z1_GripperStator_col_2" contype="0" conaffinity="1" />
+                        <geom mesh="z1_GripperStator_col_3" contype="0" conaffinity="1" />
+                        <geom mesh="z1_GripperStator_col_4" contype="0" conaffinity="1" />
+                        <geom mesh="z1_GripperStator_col_5" contype="0" conaffinity="1" />
+                        <geom mesh="z1_GripperStator_col_6" contype="0" conaffinity="1" />
+                        <!-- ★ Stator 指尖接触垫 (box) — 核心抓握接触面 -->
+                        <geom type="box" size="0.014 0.015 0.004"
+                              pos="0.186 -0.015 -0.0125"
+                              name="stator_pad_1"
+                              solref="0.01 0.5"
+                              solimp="0.9 0.95 0.001"
+                              friction="2.0 0.05 0.001"
+                              condim="4"
+                              contype="1" conaffinity="1" />
+                        <geom type="box" size="0.014 0.015 0.004"
+                              pos="0.186  0.015 -0.0125"
+                              name="stator_pad_2"
+                              solref="0.01 0.5"
+                              solimp="0.9 0.95 0.001"
+                              friction="2.0 0.05 0.001"
+                              condim="4"
+                              contype="1" conaffinity="1" />
                         
                         
                         <body name="gripperMover" pos="0.1 0 0" gravcomp="1">
                           <inertial pos="0.0132063 0.00476708 0.00380534" quat="0.0631093 0.669067 -0.0615783 0.737953" mass="0.276213" diaginertia="0.000359044 0.000270888 0.000172378" />
                           <joint name="jointGripper" axis="0 1 0" range="-1.51844 0" />
-                          <geom type="mesh" mesh="z1_GripperMover" />
-                          <geom mesh="z1_GripperMover_col_1" />
-                          <geom mesh="z1_GripperMover_col_2" />
-                          <geom mesh="z1_GripperMover_col_3" />
-                          <geom mesh="z1_GripperMover_col_4" />
-                          <geom mesh="z1_GripperMover_col_5" />
-                          <geom />
-                          <geom />
+                          <geom type="mesh" mesh="z1_GripperMover" contype="0" conaffinity="0" />
+                          <!-- Mover structural mesh collision (passive, contype=0) -->
+                          <geom mesh="z1_GripperMover_col_1" contype="0" conaffinity="1" />
+                          <geom mesh="z1_GripperMover_col_2" contype="0" conaffinity="1" />
+                          <geom mesh="z1_GripperMover_col_3" contype="0" conaffinity="1" />
+                          <geom mesh="z1_GripperMover_col_4" contype="0" conaffinity="1" />
+                          <geom mesh="z1_GripperMover_col_5" contype="0" conaffinity="1" />
+                          <!-- ★ Mover 指尖接触垫 (box) — 核心抓握接触面 -->
+                          <geom type="box" size="0.014 0.015 0.004"
+                                pos="0.086 -0.015 -0.0055"
+                                name="mover_pad_1"
+                                solref="0.01 0.5"
+                                solimp="0.9 0.95 0.001"
+                                friction="2.0 0.05 0.001"
+                                condim="4"
+                                contype="1" conaffinity="1" />
+                          <geom type="box" size="0.014 0.015 0.004"
+                                pos="0.086  0.015 -0.0055"
+                                name="mover_pad_2"
+                                solref="0.01 0.5"
+                                solimp="0.9 0.95 0.001"
+                                friction="2.0 0.05 0.001"
+                                condim="4"
+                                contype="1" conaffinity="1" />
                         </body>
                       </body>
                     </body>

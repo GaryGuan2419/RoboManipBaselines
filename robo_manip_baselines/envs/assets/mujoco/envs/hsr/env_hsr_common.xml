@@ -5,14 +5,14 @@
   <statistic extent="2.0"/>
 
   <visual>
-    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0.0 0.0 0.0"/>
-    <rgba haze="1.0 1.0 1.0 1.0"/>
+    <headlight diffuse="0.4 0.4 0.4" ambient="0.2 0.2 0.2" specular="0.1 0.1 0.1"/>
+    <rgba haze="0.15 0.25 0.35 1.0"/>
     <global azimuth="90" elevation="-20"/>
     <quality shadowsize="8192"/>
   </visual>
 
   <asset>
-    <texture type="skybox" builtin="gradient" rgb1="0.9 1.0 1.0" rgb2="0.9 1.0 1.0" width="512" height="3072"/>
+    <texture type="skybox" builtin="gradient" rgb1="0.1 0.15 0.2" rgb2="0.0 0.0 0.0" width="512" height="3072"/>
     <texture name="floor" file="floor/floor1.png" type="2d"/>
     <material name="floor" texture="floor" specular="0.2" shininess="0.3"/>
     <texture name="wall" file="wall/wall1.png" type="cube"/>

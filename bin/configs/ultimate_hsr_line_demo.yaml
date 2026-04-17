@@ -16,6 +16,9 @@ handover_skill_steps: 150
 place_skill_steps: 30
 # After arm align, hold physics before place policy (reduces first-step grip/arm jerk vs teleop start).
 place_pre_policy_hold_steps: 24
+# First N place-policy steps: override B gripper cmd (tight-hold formula) so the network cannot
+# command a wide open on step 0. 0 = disabled.
+place_freeze_grip_steps: 20
 # Optional: lower than default hold_dual integral if this hold feels too stiff.
 # place_pre_hold_arm_integral_gain: 0.04
 

@@ -377,7 +377,10 @@
 <camera name="pick_overhead_view" pos="-1.82 0.0 0.9" xyaxes="0 -1 0 1 0 0" fovy="70" />
 <!-- Place: same offset from target_area as env_hsr_tidyup_place (target 0.65,0.08 -> cam side/overhead); ultimate target (2,0). -->
 <camera name="place_side_view" pos="1.9 -0.78 0.35" xyaxes="1 0 0 0 0.3 1" fovy="65" />
-<camera name="place_overhead_view" pos="1.9 0.0 0.9" xyaxes="0 -1 0 1 0 0" fovy="70" /></worldbody><actuator><velocity name="robot_a/mobile_x_joint" joint="robot_a/mobile_x_joint" ctrlrange="-1 1" kv="1000" />
+<camera name="place_overhead_view" pos="1.9 0.0 0.9" xyaxes="0 -1 0 1 0 0" fovy="70" />
+<!-- Phase1 GraspNet: from +Y toward origin; ~1m closer along same view ray (less reprojection error). -->
+<camera name="graspnet_scene_cam" pos="0 2 1.03" xyaxes="-1 0 0 0 -0.38 0.92" fovy="72" />
+</worldbody><actuator><velocity name="robot_a/mobile_x_joint" joint="robot_a/mobile_x_joint" ctrlrange="-1 1" kv="1000" />
     <velocity name="robot_a/mobile_y_joint" joint="robot_a/mobile_y_joint" ctrlrange="-1 1" kv="1000" />
     <velocity name="robot_a/mobile_theta_joint" joint="robot_a/mobile_theta_joint" ctrlrange="-1 1" kv="1000" />
     <position class="hsr" kp="2000" name="robot_a/arm_lift_joint" joint="robot_a/arm_lift_joint" />

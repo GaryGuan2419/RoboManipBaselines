@@ -328,6 +328,24 @@ class TeleopBase(OperationDataMixin, ABC):
             action="store_true",
             help="whether to plot tactile sensor measurements",
         )
+        parser.add_argument(
+            "--record_every_steps",
+            type=int,
+            default=2,
+            help=(
+                "record one sample every N control loops. "
+                "Smaller value gives denser trajectories but can be slower."
+            ),
+        )
+        parser.add_argument(
+            "--image_every_steps",
+            type=int,
+            default=8,
+            help=(
+                "refresh camera images for UI every N control loops. "
+                "Larger value reduces rendering load."
+            ),
+        )
 
         parser.add_argument(
             "--world_idx_list",
@@ -395,6 +413,10 @@ class TeleopBase(OperationDataMixin, ABC):
 
         if self.args.seed < 0:
             self.args.seed = int(time.time()) % (2**32)
+        if self.args.record_every_steps < 1:
+            parser.error("--record_every_steps must be >= 1")
+        if self.args.image_every_steps < 1:
+            parser.error("--image_every_steps must be >= 1")
 
     def set_additional_args(self, parser):
         pass
@@ -486,23 +508,29 @@ class TeleopBase(OperationDataMixin, ABC):
                             device.attach_to_viewer(viewer, env=self.env.unwrapped)
                             
             self._loop_count += 1
-            
-            # Throttle all offscreen rendering to every 30 steps (perf vs visual)
-            if self._loop_count % 30 == 0:
-                # Fetch images from offscreen cameras
+
+            # === Image Fetch & Display (configurable cadence to balance UI and latency) ===
+            if self._loop_count % self.args.image_every_steps == 0:
                 if hasattr(self.env.unwrapped, "get_images"):
                     images_info = self.env.unwrapped.get_images()
                     self.info.update(images_info)
-
-                # Record data (with images)
-                if self.phase_manager.is_phases(["TeleopPhase", "ReplayPhase"]):
-                    self.record_data()
-
-                # Update small windows
+                # Update display window
                 try:
                     self.draw_image()
                 except Exception as e:
                     print(f"Warning: Failed to draw image: {e}")
+
+            # === Data Recording (configurable cadence) ===
+            # Example at dt=0.032s (~31.25Hz control):
+            #   every 1 step -> ~31 Hz, every 2 steps -> ~15.6 Hz, every 3 steps -> ~10.4 Hz.
+            if self._loop_count % self.args.record_every_steps == 0:
+                if self.phase_manager.is_phases(["TeleopPhase", "ReplayPhase"]):
+                    # Re-fetch images right before recording if the last fetch was too long ago
+                    if self._loop_count % self.args.image_every_steps != 0:
+                        if hasattr(self.env.unwrapped, "get_images"):
+                            images_info = self.env.unwrapped.get_images()
+                            self.info.update(images_info)
+                    self.record_data()
 
             if self.args.plot_pointcloud:
                 self.draw_pointcloud()
@@ -576,7 +604,8 @@ class TeleopBase(OperationDataMixin, ABC):
         # Reset environment
         self.env.unwrapped.world_random_scale = self.args.world_random_scale
         self.data_manager.setup_env_world(world_idx)
-        self.env.reset(seed=self.args.seed)
+        self.obs = self.env.reset(seed=self.args.seed)[0]
+        self.motion_manager.sync_with_obs(self.obs)
         print(
             f"[{self.__class__.__name__}] Reset environment. demo_name: {self.demo_name}, world_idx: {self.data_manager.world_idx}, episode_idx: {self.data_manager.episode_idx}"
         )
@@ -606,7 +635,7 @@ class TeleopBase(OperationDataMixin, ABC):
                 "..",
                 "dataset",
                 f"{self.demo_name}_{self.datetime_now:%Y%m%d_%H%M%S}",
-                f"{self.demo_name}_world{self.data_manager.world_idx:0>1}_{self.data_manager.episode_idx:0>3}.{self.args.file_format}",
+                f"{self.demo_name}_world{(self.data_manager.world_idx or 0):0>1}_{(self.data_manager.episode_idx or 0):0>3}.{self.args.file_format}",
             )
         )
         self.data_manager.save_data(filename)

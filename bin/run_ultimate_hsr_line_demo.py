@@ -6,6 +6,12 @@ Usage (from repo root):
   python bin/run_ultimate_hsr_line_demo.py --skip_policies   # navigation + alignment only
   python bin/run_ultimate_hsr_line_demo.py --config bin/configs/ultimate_hsr_line_demo.yaml
 
+Export MP4 (Gymnasium default free camera, same azimuth/distance as env.default_camera_config;
+not a screen capture)::
+
+  python bin/run_ultimate_hsr_line_demo.py --config bin/configs/ultimate_hsr_line_demo.yaml \\
+    --camera_preview policy --record_video runs/ultimate_line.mp4
+
 Requires checkpoints + model_meta_info.pkl next to each ckpt unless --skip_policies.
 """
 
@@ -28,6 +34,7 @@ if _BIN not in sys.path:
 
 import handover_config as hc  # noqa: E402
 from handover_utils import align_arm_to_pose, hold_dual_pose_steps  # noqa: E402
+from ultimate_line_mp4_recorder import UltimateLineMp4Recorder  # noqa: E402
 
 from robo_manip_baselines.envs.mujoco.hsr.MujocoDualHsrUltimateLineEnv import (  # noqa: E402
     MujocoDualHsrUltimateLineEnv,
@@ -100,6 +107,20 @@ def main():
         default=None,
         help="OpenCV windows during ManiFlow: policy=inputs to network; all=all RGB in env.",
     )
+    parser.add_argument(
+        "--record_video",
+        type=str,
+        default=None,
+        metavar="PATH.mp4",
+        help="After run, save MP4 from rgb_array + env.render() (default free camera). "
+        "Implies rgb_array; disables interactive --render. Needs opencv-python or imageio[ffmpeg].",
+    )
+    parser.add_argument(
+        "--record_fps",
+        type=float,
+        default=24.0,
+        help="Frames per second for --record_video [default: 24]",
+    )
     args = parser.parse_args()
 
     cfg = {}
@@ -124,6 +145,7 @@ def main():
     place_pre_hold_arm_integral_gain = float(
         cfg.get("place_pre_hold_arm_integral_gain", 0.04)
     )
+    place_freeze_grip_steps = int(cfg.get("place_freeze_grip_steps", 30))
 
     cam_prev = args.camera_preview if args.camera_preview is not None else cfg.get(
         "camera_preview", "none"
@@ -190,6 +212,20 @@ def main():
     if args.render:
         render_mode = "human"
 
+    record_path = args.record_video or (cfg.get("record_video") if cfg else None)
+    if record_path in ("", None):
+        record_path = None
+    record_fps = float(args.record_fps)
+    if cfg and cfg.get("record_fps") is not None:
+        record_fps = float(cfg["record_fps"])
+    if record_path:
+        if args.render:
+            print(
+                "[Record] --record_video forces rgb_array (Gymnasium default free camera); "
+                "interactive --render is disabled for this run."
+            )
+        render_mode = "rgb_array"
+
     print("=" * 60)
     print(" Ultimate HSR line demo (pick -> handover -> place)")
     print(f" nav_source={nav_source}  skip_policies={args.skip_policies}")
@@ -208,16 +244,43 @@ def main():
         )
         print(
             f" handover_settle_steps={handover_settle_steps}  "
-            f"handover_freeze_b_base_steps={handover_freeze_b_base_steps}"
+            f"handover_freeze_b_base_steps={handover_freeze_b_base_steps}  "
+            f"place_freeze_grip_steps={place_freeze_grip_steps}"
         )
     if camera_preview:
         print(
             f" camera_preview={camera_preview}  "
             f"(policy=ManiFlow inputs, all=every env rgb_images key)"
         )
+    if record_path:
+        print(f" record_video={record_path!r}  record_fps={record_fps}")
     print("=" * 60)
 
     env = MujocoDualHsrUltimateLineEnv(render_mode=render_mode)
+    # MujocoEnvBase sets mujoco_renderer width/height to None (speed). rgb_array needs pixels for
+    # OffScreenViewer — otherwise render() fails with MjrRect(..., None, None).
+    if render_mode == "rgb_array":
+        env.mujoco_renderer.width = 640
+        env.mujoco_renderer.height = 480
+
+    recorder = None
+    if record_path:
+        recorder = UltimateLineMp4Recorder(env, record_path, fps=record_fps)
+        recorder.install()
+        import atexit
+
+        def _mp4_atexit():
+            nonlocal recorder
+            if recorder is not None:
+                try:
+                    recorder.close()
+                    print(f"[Record] (atexit) Finalized {record_path!r}")
+                except Exception:
+                    pass
+                recorder = None
+
+        atexit.register(_mp4_atexit)
+
     obs, _info = env.reset()
 
     for _ in range(warmup):
@@ -511,6 +574,7 @@ def main():
             1,
             max_steps=place_steps,
             camera_preview=camera_preview,
+            freeze_grip_steps=place_freeze_grip_steps,
         )
         env.unwrapped.unlock_gripper()
         del place_ex
@@ -525,6 +589,15 @@ def main():
         force_tight_grip_robots=(),
         render_fn=(lambda: env.render()) if render_mode == "human" else None,
     )
+
+    if recorder is not None:
+        try:
+            recorder.close()
+            print(f"[Record] Wrote {record_path!r}  ({record_fps} fps, rgb_array default free camera)")
+        except Exception as exc:
+            print(f"[Record] Failed to finalize MP4: {exc}")
+        finally:
+            recorder = None
 
     preview_cameras_close()
     if dummy_tidyup is not None:
