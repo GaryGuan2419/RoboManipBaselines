@@ -104,12 +104,18 @@ def navigate_to_dual(
     yaw_gate: float = 0.0,
     post_arrival_hold_steps: int = 8,
     seed_prev_action_18: np.ndarray | None = None,
+    arrival_blend_steps: int = 0,
 ):
     """Navigate one robot's mobile base while holding arms.
 
     If ``seed_prev_action_18`` is set (last 18-dim ``env`` action from policy, another navigate, or
     hold), arm+grip *commands* start there while ``locked_ref_arm`` stays the measured pose at nav
     entry — avoids ``ctrl <- qpos`` sag at segment boundaries.
+
+    If ``arrival_blend_steps`` > 0, after reaching the goal we linearly blend the last navigation
+    command into the measured-qpos snap hold over that many steps (zero base velocity), then run
+    ``post_arrival_hold_steps`` snap holds. This reduces the jerk from an abrupt switch out of the
+    nav integral loop into a fixed snap target.
 
     Returns:
         (success, last_action_18) — last full action sent to ``env.step`` (including post-arrival hold).
@@ -230,8 +236,23 @@ def navigate_to_dual(
             # Re-snap arm+grip targets to **measured** qpos so PD does not fight stale nav-start
             # lock (reduces end-of-nav sag / jerk).
             snap = build_dual_hold_targets_from_current(env, force_tight_grip_robots)
+            snap_act = dual_hold_action_from_targets(snap)
+            pre_arrival = last_action.astype(np.float64, copy=True)
+            bn = max(0, int(arrival_blend_steps))
+            if bn > 0:
+                print(
+                    f"[Navigation] Robot {robot_name} arrival blend: {bn} steps "
+                    f"-> snap, then hold {int(post_arrival_hold_steps)}."
+                )
+                for t in range(bn):
+                    alpha = float(t + 1) / float(max(bn, 1))
+                    blended = (1.0 - alpha) * pre_arrival + alpha * snap_act
+                    blended[0:3] = 0.0
+                    blended[9:12] = 0.0
+                    last_action = blended.copy()
+                    env.step(last_action)
             for _ in range(max(0, int(post_arrival_hold_steps))):
-                last_action = dual_hold_action_from_targets(snap)
+                last_action = dual_hold_action_from_targets(snap).copy()
                 env.step(last_action)
             return True, last_action
 

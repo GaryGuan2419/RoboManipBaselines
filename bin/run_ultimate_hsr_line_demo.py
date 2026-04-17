@@ -141,6 +141,10 @@ def main():
     a_open = float(cfg.get("a_open_cmd", 0.85))
     handover_settle_steps = int(cfg.get("handover_settle_steps", 40))
     handover_freeze_b_base_steps = int(cfg.get("handover_freeze_b_base_steps", 0))
+    # A/B drive to handover: soften nav end + settle before the other robot moves (reduces jerk / drops).
+    a_handover_nav_arrival_blend_steps = int(cfg.get("a_handover_nav_arrival_blend_steps", 10))
+    b_handover_nav_arrival_blend_steps = int(cfg.get("b_handover_nav_arrival_blend_steps", 6))
+    between_handover_navs_hold_steps = int(cfg.get("between_handover_navs_hold_steps", 28))
     place_pre_policy_hold_steps = int(cfg.get("place_pre_policy_hold_steps", 20))
     place_pre_hold_arm_integral_gain = float(
         cfg.get("place_pre_hold_arm_integral_gain", 0.04)
@@ -247,6 +251,11 @@ def main():
             f"handover_freeze_b_base_steps={handover_freeze_b_base_steps}  "
             f"place_freeze_grip_steps={place_freeze_grip_steps}"
         )
+    print(
+        f" a_handover_nav_arrival_blend_steps={a_handover_nav_arrival_blend_steps}  "
+        f"b_handover_nav_arrival_blend_steps={b_handover_nav_arrival_blend_steps}  "
+        f"between_handover_navs_hold_steps={between_handover_navs_hold_steps}"
+    )
     if camera_preview:
         print(
             f" camera_preview={camera_preview}  "
@@ -376,7 +385,22 @@ def main():
         kp_yaw=kp_yaw,
         force_tight_grip_robots=(0,),
         seed_prev_action_18=last_env_action_18,
+        arrival_blend_steps=a_handover_nav_arrival_blend_steps,
     )
+
+    # Let A (baton) + B arms settle after A's nav snap before B starts translating (reduces B-start jitter).
+    if between_handover_navs_hold_steps > 0:
+        print(
+            f"[Handover] Between A and B nav: {between_handover_navs_hold_steps} dual hold steps "
+            "(A tight grip; bases fixed)."
+        )
+        last_env_action_18 = hold_dual_pose_steps(
+            env.unwrapped,
+            between_handover_navs_hold_steps,
+            force_tight_grip_robots=(0,),
+            render_fn=(lambda: env.render()) if render_mode == "human" else None,
+        )
+        mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
 
     # --- B to handover ---
     _, last_env_action_18 = navigate_to_dual(
@@ -388,6 +412,7 @@ def main():
         kp_pos=kp_pos,
         kp_yaw=kp_yaw,
         seed_prev_action_18=last_env_action_18,
+        arrival_blend_steps=b_handover_nav_arrival_blend_steps,
     )
 
     print("[Align] Interpolating arms to calibrated handover poses...")

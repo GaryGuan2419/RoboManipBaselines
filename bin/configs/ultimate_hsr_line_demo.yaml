@@ -26,6 +26,12 @@ place_freeze_grip_steps: 20
 b_grip_takeover_qpos: 0.22
 release_dwell_steps: 12
 a_open_cmd: 0.85
+# After A reaches handover pose (baton), dual hold before B starts driving — damps nav snap + contact.
+between_handover_navs_hold_steps: 28
+# Blend last nav cmd -> measured-qpos snap at nav end (0 = off). Larger = softer stop, more steps.
+a_handover_nav_arrival_blend_steps: 10
+b_handover_nav_arrival_blend_steps: 6
+
 # After nav + arm align: hold physics before handover policy (helps if B still sliding).
 handover_settle_steps: 40
 # First N handover policy steps: zero B chassis cmd (arm+grip from policy). 0 = off.
