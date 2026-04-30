@@ -21,6 +21,79 @@ _TIGHT_GRIP_CMD = -0.30
 # Keep moderate — too large causes visible "lift"; handover A uses **no** integral (see below).
 _NAV_ARM_LOCK_INTEGRAL_GAIN = 0.07
 _SKILL_IDLE_ARM_INTEGRAL_GAIN = 0.06
+_ARM_JOINT_SHORT_NAMES = ("lift", "flex", "roll", "wflex", "wroll")
+_ARM_JOINT_NAMES = (
+    "arm_lift_joint",
+    "arm_flex_joint",
+    "arm_roll_joint",
+    "wrist_flex_joint",
+    "wrist_roll_joint",
+)
+
+
+def print_transition_diagnostics(env, label: str, last_action_18=None) -> None:
+    """Print qpos vs commanded arm targets around phase boundaries."""
+    mujoco.mj_forward(env.model, env.data)
+    print(f"[Diag] {label}")
+    action = None
+    if last_action_18 is not None:
+        action = np.asarray(last_action_18, dtype=np.float64).reshape(18)
+    for robot_index, prefix, robot_name in (
+        (0, "robot_a", "A"),
+        (1, "robot_b", "B"),
+    ):
+        arm_q = []
+        for joint_name in _ARM_JOINT_NAMES:
+            addr = env.model.jnt_qposadr[
+                mujoco.mj_name2id(
+                    env.model,
+                    mujoco.mjtObj.mjOBJ_JOINT,
+                    f"{prefix}/{joint_name}",
+                )
+            ]
+            arm_q.append(float(env.data.qpos[addr]))
+        arm_q = np.asarray(arm_q, dtype=np.float64)
+        off = robot_index * 9
+        if action is not None:
+            arm_cmd = action[off + 3 : off + 8].astype(np.float64, copy=True)
+            cmd_src = "last_action"
+        else:
+            arm_cmd = np.asarray(env.data.ctrl[off + 3 : off + 8], dtype=np.float64)
+            cmd_src = "data.ctrl"
+        grip_addr = env.model.jnt_qposadr[
+            mujoco.mj_name2id(
+                env.model,
+                mujoco.mjtObj.mjOBJ_JOINT,
+                f"{prefix}/hand_motor_joint",
+            )
+        ]
+        grip_q = float(env.data.qpos[grip_addr])
+        grip_cmd = (
+            float(action[off + 8])
+            if action is not None
+            else float(env.data.ctrl[off + 8])
+        )
+        palm_id = mujoco.mj_name2id(
+            env.model,
+            mujoco.mjtObj.mjOBJ_BODY,
+            f"{prefix}/hand_palm_link",
+        )
+        palm_z = float(env.data.xpos[palm_id][2])
+        diff = arm_cmd - arm_q
+        q_s = " ".join(
+            f"{name}={value:+.4f}"
+            for name, value in zip(_ARM_JOINT_SHORT_NAMES, arm_q)
+        )
+        d_s = " ".join(
+            f"{name}={value:+.4f}"
+            for name, value in zip(_ARM_JOINT_SHORT_NAMES, diff)
+        )
+        print(
+            f"[Diag]   {robot_name} palm_z={palm_z:+.4f} grip(q/cmd)="
+            f"{grip_q:+.4f}/{grip_cmd:+.4f} cmd_src={cmd_src}"
+        )
+        print(f"[Diag]   {robot_name} qpos     {q_s}")
+        print(f"[Diag]   {robot_name} cmd-qpos {d_s}")
 
 
 def _refresh_locked_grip_from_qpos(env, locked, force_tight_grip_robots):
@@ -105,6 +178,7 @@ def navigate_to_dual(
     post_arrival_hold_steps: int = 8,
     seed_prev_action_18: np.ndarray | None = None,
     arrival_blend_steps: int = 0,
+    transition_diag: bool = False,
 ):
     """Navigate one robot's mobile base while holding arms.
 
@@ -238,6 +312,12 @@ def navigate_to_dual(
             snap = build_dual_hold_targets_from_current(env, force_tight_grip_robots)
             snap_act = dual_hold_action_from_targets(snap)
             pre_arrival = last_action.astype(np.float64, copy=True)
+            if transition_diag:
+                print_transition_diagnostics(
+                    env,
+                    f"nav {robot_name}: arrived before snap/blend",
+                    pre_arrival,
+                )
             bn = max(0, int(arrival_blend_steps))
             if bn > 0:
                 print(
@@ -251,9 +331,21 @@ def navigate_to_dual(
                     blended[9:12] = 0.0
                     last_action = blended.copy()
                     env.step(last_action)
+                if transition_diag:
+                    print_transition_diagnostics(
+                        env,
+                        f"nav {robot_name}: after arrival blend",
+                        last_action,
+                    )
             for _ in range(max(0, int(post_arrival_hold_steps))):
                 last_action = dual_hold_action_from_targets(snap).copy()
                 env.step(last_action)
+            if transition_diag:
+                print_transition_diagnostics(
+                    env,
+                    f"nav {robot_name}: after post-arrival hold",
+                    last_action,
+                )
             return True, last_action
 
         v_x_global = kp_pos * err_x
@@ -302,6 +394,7 @@ def navigate_to_xy_world_line_then_along_x(
     kp_yaw=2.0,
     force_tight_grip_robots=(),
     seed_prev_action_18: np.ndarray | None = None,
+    transition_diag: bool = False,
 ):
     """
     Drive to end_xy_world with heading target_yaw, staying on world y = end_xy_world[1].
@@ -337,6 +430,7 @@ def navigate_to_xy_world_line_then_along_x(
             force_tight_grip_robots=force_tight_grip_robots,
             yaw_gate=yaw_gate,
             seed_prev_action_18=seed2,
+            transition_diag=transition_diag,
         )
         ok_all = ok_all and ok1
         seed2 = last1
@@ -355,6 +449,7 @@ def navigate_to_xy_world_line_then_along_x(
         force_tight_grip_robots=force_tight_grip_robots,
         yaw_gate=yaw_gate,
         seed_prev_action_18=seed2,
+        transition_diag=transition_diag,
     )
     return ok_all and ok2, last_out
 
@@ -473,6 +568,7 @@ def execute_skill_dual(
     camera_preview=None,
     freeze_grip_steps: int = 0,
     seed_prev_action_18: np.ndarray | None = None,
+    transition_diag: bool = False,
 ):
     robot_name = "A" if robot_index == 0 else "B"
     print(f"\n[Skill] Robot {robot_name} '{skill_name}' ({max_steps} steps)")
@@ -538,6 +634,7 @@ def execute_skill_dual(
     ck_cams = getattr(planner, "camera_names", None)
     phase_tag = f"{robot_name}_{skill_name}"
     last_full = np.zeros(18, dtype=np.float64)
+    diag_steps = {0, 1, 5, 10}
     for _step in range(max_steps):
         info = _map_dual_images_to_single(
             env, prefix, cam_mode, policy_camera_names=ck_cams
@@ -569,7 +666,19 @@ def execute_skill_dual(
         full_action[idle_offset + 8] = idle_g_cmd
 
         last_full = full_action.copy()
+        if transition_diag and _step in diag_steps:
+            print_transition_diagnostics(
+                env,
+                f"{robot_name}_{skill_name}: before policy step {_step}",
+                last_full,
+            )
         obs, _r, _t, _tr, _i = env.step(full_action)
+        if transition_diag and _step in diag_steps:
+            print_transition_diagnostics(
+                env,
+                f"{robot_name}_{skill_name}: after policy step {_step}",
+                last_full,
+            )
 
     preview_cameras_close()
     print(
@@ -590,6 +699,7 @@ def execute_handover_b_release_a_when_closed(
     camera_preview=None,
     freeze_b_base_steps: int = 0,
     seed_prev_action_18: np.ndarray | None = None,
+    transition_diag: bool = False,
 ):
     """Run handover policy on robot B; when B gripper qpos is closed enough, open A after dwell."""
     print(
@@ -637,6 +747,7 @@ def execute_handover_b_release_a_when_closed(
     ck_cams = getattr(planner, "camera_names", None)
     phase_tag = f"B_{skill_name}"
     last_full = np.zeros(18, dtype=np.float64)
+    diag_steps = {0, 1, 5, 10}
     for _step in range(max_steps):
         info = _map_dual_images_to_single(
             env, "robot_b", "handover", policy_camera_names=ck_cams
@@ -673,7 +784,19 @@ def execute_handover_b_release_a_when_closed(
             full_action[8] = a_open_cmd
 
         last_full = full_action.copy()
+        if transition_diag and _step in diag_steps:
+            print_transition_diagnostics(
+                env,
+                f"B_{skill_name}: before policy step {_step}",
+                last_full,
+            )
         obs, _r, _t, _tr, _i = env.step(full_action)
+        if transition_diag and _step in diag_steps:
+            print_transition_diagnostics(
+                env,
+                f"B_{skill_name}: after policy step {_step}",
+                last_full,
+            )
         if released:
             print(
                 f"[Handover] B policy stopped after A release (step {_step + 1}/{max_steps})."

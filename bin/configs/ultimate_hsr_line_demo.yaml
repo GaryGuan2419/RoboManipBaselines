@@ -5,6 +5,8 @@ nav_source: oracle
 no_nav_fallback: false
 # Optional: OpenCV windows during ManiFlow (none | policy | all). Override with --camera_preview.
 # camera_preview: none
+# Print qpos/cmd diagnostics at task boundaries and early policy steps.
+transition_diag: true
 
 kp_pos: 2.0
 kp_yaw: 2.0
@@ -16,9 +18,9 @@ handover_skill_steps: 150
 place_skill_steps: 30
 # After arm align, hold physics before place policy (reduces first-step grip/arm jerk vs teleop start).
 place_pre_policy_hold_steps: 24
-# First N place-policy steps: override B gripper cmd (tight-hold formula) so the network cannot
-# command a wide open on step 0. 0 = disabled.
-place_freeze_grip_steps: 20
+# First N place-policy steps: B gripper cmd is overridden (tight-hold); longer N = longer lock
+# before the policy can change grip. 0 = disabled.
+place_freeze_grip_steps: 25
 # Optional: lower than default hold_dual integral if this hold feels too stiff.
 # place_pre_hold_arm_integral_gain: 0.04
 
@@ -58,3 +60,11 @@ b_place_two_phase: true
 b_place_nav_yaw_gate: 0.06
 # Optional: fix world y of the approach line (omit to use target_area.y + offset[1]).
 # b_place_world_line_y: 0.0
+
+# Optional: override the initial arm+gripper qpos just before the "[Align] Interpolating arms..."
+# stage. This changes the "current_arm/current_grip" start states used by align_arm_to_pose(),
+# while keeping the final calibrated targets unchanged.
+# align_start_arm_a: [0.20, -2.50, 0.01, 1.08, 0.00]  # 5-dim: [lift, flex, roll, wrist_flex, wrist_roll]
+# align_start_grip_a: 0.80                           # 1-dim: hand_motor_joint qpos
+# align_start_arm_b: [0.18, -2.55, 0.01, 1.08, 0.01]
+# align_start_grip_b: 0.80

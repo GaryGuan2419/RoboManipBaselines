@@ -59,6 +59,7 @@ from ultimate_line_demo_lib import (  # noqa: E402
     navigate_to_dual,
     navigate_to_xy_world_line_then_along_x,
     preview_cameras_close,
+    print_transition_diagnostics,
     robot_base_xy_yaw,
 )
 
@@ -121,6 +122,11 @@ def main():
         default=24.0,
         help="Frames per second for --record_video [default: 24]",
     )
+    parser.add_argument(
+        "--transition_diag",
+        action="store_true",
+        help="Print qpos/cmd diagnostics at task boundaries and early policy steps.",
+    )
     args = parser.parse_args()
 
     cfg = {}
@@ -150,6 +156,21 @@ def main():
         cfg.get("place_pre_hold_arm_integral_gain", 0.04)
     )
     place_freeze_grip_steps = int(cfg.get("place_freeze_grip_steps", 30))
+    transition_diag = bool(args.transition_diag or cfg.get("transition_diag", False))
+    # Optional: override the arm+gripper qpos right before the "[Align] Interpolating arms..."
+    # stage. This changes the "current_arm/current_grip" used as interpolation start.
+    align_start_arm_a = cfg.get("align_start_arm_a", None)
+    align_start_grip_a = cfg.get("align_start_grip_a", None)
+    align_start_arm_b = cfg.get("align_start_arm_b", None)
+    align_start_grip_b = cfg.get("align_start_grip_b", None)
+    if align_start_arm_a is not None:
+        align_start_arm_a = np.asarray(align_start_arm_a, dtype=np.float64).reshape(5)
+    if align_start_arm_b is not None:
+        align_start_arm_b = np.asarray(align_start_arm_b, dtype=np.float64).reshape(5)
+    if align_start_grip_a is not None:
+        align_start_grip_a = float(align_start_grip_a)
+    if align_start_grip_b is not None:
+        align_start_grip_b = float(align_start_grip_b)
 
     cam_prev = args.camera_preview if args.camera_preview is not None else cfg.get(
         "camera_preview", "none"
@@ -263,6 +284,8 @@ def main():
         )
     if record_path:
         print(f" record_video={record_path!r}  record_fps={record_fps}")
+    if transition_diag:
+        print(" transition_diag=true  ([Diag] qpos/cmd logs enabled)")
     print("=" * 60)
 
     env = MujocoDualHsrUltimateLineEnv(render_mode=render_mode)
@@ -292,12 +315,18 @@ def main():
 
     obs, _info = env.reset()
 
+    def diag(label: str):
+        if transition_diag:
+            print_transition_diagnostics(env.unwrapped, label, last_env_action_18)
+
     for _ in range(warmup):
         env.step(env.get_hold_action())
         if render_mode == "human":
             env.render()
 
     mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+    last_env_action_18 = None
+    diag("after reset/warmup")
 
     if nav_source == "oracle":
         waypoints = compute_navigation_waypoints(env.unwrapped)
@@ -332,6 +361,7 @@ def main():
     }
 
     # --- Phase: A to pick ---
+    diag("before A_pick nav")
     _, last_env_action_18 = navigate_to_dual(
         env.unwrapped,
         0,
@@ -340,7 +370,9 @@ def main():
         max_steps=max_steps_nav,
         kp_pos=kp_pos,
         kp_yaw=kp_yaw,
+        transition_diag=transition_diag,
     )
+    diag("after A_pick nav")
 
     dummy_tidyup = None
     # Last 18-dim env action — seeds next navigate / policy idle arm (avoids ctrl=q sag at segment boundaries).
@@ -359,6 +391,7 @@ def main():
         # One shared single-robot dummy for pick + handover + place MotionManager (RGB comes from main dual env).
         dummy_tidyup = MujocoHsrTidyupEnv(render_mode="rgb_array")
         pick_ex = ManiFlowExecutor(ck_pick, dummy_tidyup)
+        diag("before pick policy")
         last_env_action_18 = execute_skill_dual(
             env.unwrapped,
             pick_ex,
@@ -367,7 +400,9 @@ def main():
             max_steps=pick_steps,
             camera_preview=camera_preview,
             seed_prev_action_18=last_env_action_18,
+            transition_diag=transition_diag,
         )
+        diag("after pick policy")
         env.unwrapped.unlock_gripper()
         del pick_ex
         _release_policy_memory()
@@ -375,6 +410,7 @@ def main():
         print("[Skip] pick policy")
 
     # --- A to handover ---
+    diag("before A_handover nav")
     _, last_env_action_18 = navigate_to_dual(
         env.unwrapped,
         0,
@@ -386,7 +422,9 @@ def main():
         force_tight_grip_robots=(0,),
         seed_prev_action_18=last_env_action_18,
         arrival_blend_steps=a_handover_nav_arrival_blend_steps,
+        transition_diag=transition_diag,
     )
+    diag("after A_handover nav")
 
     # Let A (baton) + B arms settle after A's nav snap before B starts translating (reduces B-start jitter).
     if between_handover_navs_hold_steps > 0:
@@ -401,8 +439,10 @@ def main():
             render_fn=(lambda: env.render()) if render_mode == "human" else None,
         )
         mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+        diag("after between-handover nav hold")
 
     # --- B to handover ---
+    diag("before B_handover nav")
     _, last_env_action_18 = navigate_to_dual(
         env.unwrapped,
         1,
@@ -413,9 +453,53 @@ def main():
         kp_yaw=kp_yaw,
         seed_prev_action_18=last_env_action_18,
         arrival_blend_steps=b_handover_nav_arrival_blend_steps,
+        transition_diag=transition_diag,
     )
+    diag("after B_handover nav")
 
     print("[Align] Interpolating arms to calibrated handover poses...")
+    diag("before handover align")
+    # Optional initial qpos override (changes interpolation start states).
+    if (
+        align_start_arm_a is not None
+        or align_start_grip_a is not None
+        or align_start_arm_b is not None
+        or align_start_grip_b is not None
+    ):
+        def _set_robot_arm_grip_qpos(robot_index: int, arm5, grip1):
+            prefix = "robot_a" if robot_index == 0 else "robot_b"
+            # Arm joints (5)
+            if arm5 is not None:
+                for j, jname in enumerate(hc.ARM_JOINT_NAMES):
+                    jid = mujoco.mj_name2id(
+                        env.unwrapped.model,
+                        mujoco.mjtObj.mjOBJ_JOINT,
+                        f"{prefix}/{jname}",
+                    )
+                    qadr = int(env.unwrapped.model.jnt_qposadr[jid])
+                    env.unwrapped.data.qpos[qadr] = float(arm5[j])
+                    # zero velocity for stability
+                    vadr = int(env.unwrapped.model.jnt_dofadr[jid])
+                    env.unwrapped.data.qvel[vadr] = 0.0
+            # Gripper joint (1)
+            if grip1 is not None:
+                gid = mujoco.mj_name2id(
+                    env.unwrapped.model,
+                    mujoco.mjtObj.mjOBJ_JOINT,
+                    f"{prefix}/{hc.GRIPPER_JOINT_NAME}",
+                )
+                qadr = int(env.unwrapped.model.jnt_qposadr[gid])
+                env.unwrapped.data.qpos[qadr] = float(grip1)
+                vadr = int(env.unwrapped.model.jnt_dofadr[gid])
+                env.unwrapped.data.qvel[vadr] = 0.0
+
+            mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+
+        _set_robot_arm_grip_qpos(0, align_start_arm_a, align_start_grip_a)
+        _set_robot_arm_grip_qpos(1, align_start_arm_b, align_start_grip_b)
+        print(
+            "[Align] Initial qpos override applied (affects interpolation start)."
+        )
     align_arm_to_pose(
         env.unwrapped,
         0,
@@ -426,6 +510,7 @@ def main():
         snap_baton=False,
         hold_start_gripper=True,
     )
+    diag("after A handover align")
     align_arm_to_pose(
         env.unwrapped,
         1,
@@ -435,8 +520,10 @@ def main():
         smooth_steps=120,
         snap_baton=False,
     )
+    diag("after B handover align")
     # Align changes arms; nav snapshot no longer matches measured pose for policy seeding.
     last_env_action_18 = None
+    diag("after handover align seed reset")
 
     if handover_settle_steps > 0:
         print(
@@ -450,9 +537,11 @@ def main():
             render_fn=(lambda: env.render()) if render_mode == "human" else None,
         )
         mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+        diag("after handover pre-policy settle")
 
     if not args.skip_policies:
         hand_ex = ManiFlowExecutorHsrDualHandoverB(ck_hand, dummy_tidyup)
+        diag("before handover policy")
         last_env_action_18 = execute_handover_b_release_a_when_closed(
             env.unwrapped,
             hand_ex,
@@ -464,7 +553,9 @@ def main():
             camera_preview=camera_preview,
             freeze_b_base_steps=handover_freeze_b_base_steps,
             seed_prev_action_18=last_env_action_18,
+            transition_diag=transition_diag,
         )
+        diag("after handover policy")
         env.unwrapped.unlock_gripper()
         del hand_ex
         _release_policy_memory()
@@ -476,9 +567,50 @@ def main():
 
     # --- B to place (optional: 180° to face +X, then approach goal from -X side) ---
     mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+    diag("before B place sequence")
+
+    def _align_b_arm_for_place_prep() -> None:
+        """Arm pose to match place ckpt init; run after any in-place yaw, before xy drive to goal."""
+        nonlocal last_env_action_18
+        if b_place_sampling_env in ("b_side_place", "b_side_place_full", "custom"):
+            print(
+                "[Align] B arm → side_place dataset init "
+                "(bin/handover_config HANDOVER_POSE_A; see hsr_b_side_place_config.ROBOT_POSE)"
+            )
+            align_arm_to_pose(
+                env.unwrapped,
+                1,
+                hc.HANDOVER_POSE_A,
+                float(hc.HANDOVER_GRIPPER_A),
+                steps=140,
+                smooth_steps=120,
+                snap_baton=False,
+                hold_start_gripper=True,
+            )
+        elif b_place_sampling_env == "tidyup_place":
+            tidyup_arm = np.array([0.25, -2.0, 0.0, -1.0, 0.0], dtype=np.float64)
+            print(
+                "[Align] B arm → env_hsr_tidyup_place.xml keyframe arm (tidyup_place ckpt); grip open"
+            )
+            align_arm_to_pose(
+                env.unwrapped,
+                1,
+                tidyup_arm,
+                0.8,
+                steps=140,
+                smooth_steps=120,
+                snap_baton=False,
+                hold_start_gripper=False,
+            )
+        else:
+            return
+        mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+        last_env_action_18 = None
+
     if b_reorient_to_plus_x:
         bx, by, _ = robot_base_xy_yaw(env.unwrapped, 1)
         print(f"[Nav] B reorient: stand at ({bx:.3f},{by:.3f}) -> yaw={b_place_yaw_plus_x:.3f} (+X)")
+        diag("before B reorient nav")
         _, last_env_action_18 = navigate_to_dual(
             env.unwrapped,
             1,
@@ -490,8 +622,12 @@ def main():
             force_tight_grip_robots=(1,),
             yaw_gate=b_place_nav_yaw_gate,
             seed_prev_action_18=last_env_action_18,
+            transition_diag=transition_diag,
         )
         mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+        diag("after B reorient nav")
+        _align_b_arm_for_place_prep()
+        diag("after B place prep align")
         g_xy = env.unwrapped.data.body("target_area").xpos[:2].copy()
         off = b_place_offset_facing_plus_x
         if b_place_world_line_y is not None:
@@ -509,6 +645,7 @@ def main():
             f"target_xy={place_xy}"
         )
         if b_place_two_phase:
+            diag("before B place two-phase nav")
             _, last_env_action_18 = navigate_to_xy_world_line_then_along_x(
                 env.unwrapped,
                 1,
@@ -521,8 +658,10 @@ def main():
                 kp_yaw=kp_yaw,
                 force_tight_grip_robots=(1,),
                 seed_prev_action_18=last_env_action_18,
+                transition_diag=transition_diag,
             )
         else:
+            diag("before B place nav")
             _, last_env_action_18 = navigate_to_dual(
                 env.unwrapped,
                 1,
@@ -534,8 +673,13 @@ def main():
                 force_tight_grip_robots=(1,),
                 yaw_gate=b_place_nav_yaw_gate,
                 seed_prev_action_18=last_env_action_18,
+                transition_diag=transition_diag,
             )
+        diag("after B place nav")
     else:
+        _align_b_arm_for_place_prep()
+        diag("after B place prep align")
+        diag("before B place nav")
         _, last_env_action_18 = navigate_to_dual(
             env.unwrapped,
             1,
@@ -546,47 +690,13 @@ def main():
             kp_yaw=kp_yaw,
             force_tight_grip_robots=(1,),
             seed_prev_action_18=last_env_action_18,
+            transition_diag=transition_diag,
         )
+        diag("after B place nav")
 
     if not args.skip_policies:
-        # Arm init vs training: b_side_place demos use hsr_b_side_place_config.build_initial_qpos_18()
-        # → arm = HANDOVER_POSE_A, grip ≈ GRIP_A_ACTUAL (same as handover_config). Align B before policy.
-        aligned_b_for_place = False
-        if b_place_sampling_env in ("b_side_place", "b_side_place_full", "custom"):
-            print(
-                "[Align] B arm → side_place dataset init "
-                "(bin/handover_config HANDOVER_POSE_A; see hsr_b_side_place_config.ROBOT_POSE)"
-            )
-            align_arm_to_pose(
-                env.unwrapped,
-                1,
-                hc.HANDOVER_POSE_A,
-                float(hc.HANDOVER_GRIPPER_A),
-                steps=140,
-                smooth_steps=120,
-                snap_baton=False,
-                hold_start_gripper=True,
-            )
-            aligned_b_for_place = True
-        elif b_place_sampling_env == "tidyup_place":
-            tidyup_arm = np.array([0.25, -2.0, 0.0, -1.0, 0.0], dtype=np.float64)
-            print(
-                "[Align] B arm → env_hsr_tidyup_place.xml keyframe arm (tidyup_place ckpt); grip open"
-            )
-            align_arm_to_pose(
-                env.unwrapped,
-                1,
-                tidyup_arm,
-                0.8,
-                steps=140,
-                smooth_steps=120,
-                snap_baton=False,
-                hold_start_gripper=False,
-            )
-            aligned_b_for_place = True
         mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
-        if aligned_b_for_place:
-            last_env_action_18 = None
+        diag("before place pre-policy hold")
 
         if place_pre_policy_hold_steps > 0:
             print(
@@ -601,6 +711,7 @@ def main():
                 arm_integral_gain=place_pre_hold_arm_integral_gain,
             )
             mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+            diag("after place pre-policy hold")
 
         # Reuse dummy_tidyup — a third MuJoCo (old place_dummy) + place ckpt often OOM-kills here.
         # Policy images are filled from the dual env in execute_skill_dual; dummy is for MotionManager only.
@@ -608,6 +719,7 @@ def main():
         _release_policy_memory()
         print("[Memory] place policy: reusing pick/handover dummy_tidyup (no extra MujocoHsrTidyupPlaceEnv).")
         place_ex = ManiFlowExecutor(ck_place, dummy_tidyup)
+        diag("before place policy")
         last_env_action_18 = execute_skill_dual(
             env.unwrapped,
             place_ex,
@@ -617,7 +729,9 @@ def main():
             camera_preview=camera_preview,
             freeze_grip_steps=place_freeze_grip_steps,
             seed_prev_action_18=last_env_action_18,
+            transition_diag=transition_diag,
         )
+        diag("after place policy")
         env.unwrapped.unlock_gripper()
         del place_ex
         _release_policy_memory()
