@@ -33,8 +33,17 @@ if _BIN not in sys.path:
     sys.path.insert(0, _BIN)
 
 import handover_config as hc  # noqa: E402
-from handover_utils import align_arm_to_pose, hold_dual_pose_steps  # noqa: E402
-from ultimate_line_mp4_recorder import UltimateLineMp4Recorder  # noqa: E402
+from handover_utils import (  # noqa: E402
+    align_arm_to_pose,
+    hold_dual_pose_steps,
+    read_arm_joints,
+    read_gripper,
+)
+from ultimate_line_mp4_recorder import (  # noqa: E402
+    UltimateLineMp4Recorder,
+    configure_rgb_array_size,
+    save_rgb_array_png,
+)
 
 from robo_manip_baselines.envs.mujoco.hsr.MujocoDualHsrUltimateLineEnv import (  # noqa: E402
     MujocoDualHsrUltimateLineEnv,
@@ -103,6 +112,12 @@ def main():
     parser.add_argument("--render", action="store_true", help="Force human render window")
     parser.add_argument("--no_render", action="store_true", help="No viewer (rgb_array)")
     parser.add_argument(
+        "--render_stride",
+        type=int,
+        default=1,
+        help="Human viewer: only draw one out of every N render calls; sim/control still step every tick.",
+    )
+    parser.add_argument(
         "--camera_preview",
         choices=["none", "policy", "all"],
         default=None,
@@ -121,6 +136,37 @@ def main():
         type=float,
         default=24.0,
         help="Frames per second for --record_video [default: 24]",
+    )
+    parser.add_argument(
+        "--record_stride",
+        type=int,
+        default=1,
+        help="Record one frame every N env steps; simulation/control still run every step [default: 1]",
+    )
+    parser.add_argument(
+        "--record_width",
+        type=int,
+        default=1920,
+        help="RGB recording width for --record_video [default: 1920]",
+    )
+    parser.add_argument(
+        "--record_height",
+        type=int,
+        default=1080,
+        help="RGB recording height for --record_video [default: 1080]",
+    )
+    parser.add_argument(
+        "--screenshot",
+        type=str,
+        default=None,
+        metavar="PATH.png",
+        help="Save one rgb_array screenshot after reset/warmup and exit quickly.",
+    )
+    parser.add_argument(
+        "--screenshot_steps",
+        type=int,
+        default=None,
+        help="Hold steps before --screenshot; default uses warmup_hold_steps.",
     )
     parser.add_argument(
         "--transition_diag",
@@ -142,11 +188,18 @@ def main():
     pick_steps = int(cfg.get("pick_skill_steps", 60))
     hand_steps = int(cfg.get("handover_skill_steps", 90))
     place_steps = int(cfg.get("place_skill_steps", 30))
+    pick_prep_lift_delta_m = float(cfg.get("pick_prep_arm_lift_delta_m", 0.0))
+    pick_prep_align_steps = int(cfg.get("pick_prep_align_steps", 90))
+    pick_prep_align_smooth_steps = int(cfg.get("pick_prep_align_smooth_steps", 75))
     b_q = float(cfg.get("b_grip_takeover_qpos", 0.22))
     dwell = int(cfg.get("release_dwell_steps", 12))
     a_open = float(cfg.get("a_open_cmd", 0.85))
     handover_settle_steps = int(cfg.get("handover_settle_steps", 40))
     handover_freeze_b_base_steps = int(cfg.get("handover_freeze_b_base_steps", 0))
+    handover_freeze_b_grip_steps = int(cfg.get("handover_freeze_b_grip_steps", 0))
+    handover_freeze_b_grip_cmd = cfg.get("handover_freeze_b_grip_cmd", None)
+    if handover_freeze_b_grip_cmd is not None:
+        handover_freeze_b_grip_cmd = float(handover_freeze_b_grip_cmd)
     # A/B drive to handover: soften nav end + settle before the other robot moves (reduces jerk / drops).
     a_handover_nav_arrival_blend_steps = int(cfg.get("a_handover_nav_arrival_blend_steps", 10))
     b_handover_nav_arrival_blend_steps = int(cfg.get("b_handover_nav_arrival_blend_steps", 6))
@@ -186,6 +239,9 @@ def main():
     # Extra world-frame xy added to B_handover_pick after geometry (fine-tune lateral approach).
     handover_b_xy_extra = np.asarray(
         cfg.get("handover_b_xy_extra", [0.0, 0.0]), dtype=np.float64
+    ).reshape(2)
+    a_pick_xy_extra = np.asarray(
+        cfg.get("a_pick_xy_extra", [0.0, 0.0]), dtype=np.float64
     ).reshape(2)
     # After handover: B turns to face +X, then drives to place with that heading.
     b_reorient_to_plus_x = bool(cfg.get("b_reorient_to_plus_x", True))
@@ -236,17 +292,35 @@ def main():
         render_mode = "rgb_array"
     if args.render:
         render_mode = "human"
+    render_stride = max(1, int(args.render_stride))
+    if cfg and cfg.get("render_stride") is not None:
+        render_stride = max(1, int(cfg["render_stride"]))
 
     record_path = args.record_video or (cfg.get("record_video") if cfg else None)
     if record_path in ("", None):
         record_path = None
+    screenshot_path = args.screenshot or (cfg.get("screenshot") if cfg else None)
+    if screenshot_path in ("", None):
+        screenshot_path = None
     record_fps = float(args.record_fps)
     if cfg and cfg.get("record_fps") is not None:
         record_fps = float(cfg["record_fps"])
-    if record_path:
+    record_stride = int(args.record_stride)
+    if cfg and cfg.get("record_stride") is not None:
+        record_stride = int(cfg["record_stride"])
+    record_stride = max(1, record_stride)
+    record_width = int(args.record_width)
+    if cfg and cfg.get("record_width") is not None:
+        record_width = int(cfg["record_width"])
+    record_height = int(args.record_height)
+    if cfg and cfg.get("record_height") is not None:
+        record_height = int(cfg["record_height"])
+    record_width = max(16, record_width)
+    record_height = max(16, record_height)
+    if record_path or screenshot_path:
         if args.render:
             print(
-                "[Record] --record_video forces rgb_array (Gymnasium default free camera); "
+                "[Record] --record_video/--screenshot forces rgb_array (Gymnasium default free camera); "
                 "interactive --render is disabled for this run."
             )
         render_mode = "rgb_array"
@@ -270,6 +344,7 @@ def main():
         print(
             f" handover_settle_steps={handover_settle_steps}  "
             f"handover_freeze_b_base_steps={handover_freeze_b_base_steps}  "
+            f"handover_freeze_b_grip_steps={handover_freeze_b_grip_steps}  "
             f"place_freeze_grip_steps={place_freeze_grip_steps}"
         )
     print(
@@ -283,21 +358,45 @@ def main():
             f"(policy=ManiFlow inputs, all=every env rgb_images key)"
         )
     if record_path:
-        print(f" record_video={record_path!r}  record_fps={record_fps}")
+        print(
+            f" record_video={record_path!r}  record_fps={record_fps}  "
+            f"record_stride={record_stride}  record_size={record_width}x{record_height}"
+        )
+    if screenshot_path:
+        print(f" screenshot={screenshot_path!r}  screenshot_size={record_width}x{record_height}")
     if transition_diag:
         print(" transition_diag=true  ([Diag] qpos/cmd logs enabled)")
+    if render_mode == "human" and render_stride > 1:
+        print(f" render_stride={render_stride}  (human viewer draws every {render_stride} render calls)")
     print("=" * 60)
 
     env = MujocoDualHsrUltimateLineEnv(render_mode=render_mode)
     # MujocoEnvBase sets mujoco_renderer width/height to None (speed). rgb_array needs pixels for
     # OffScreenViewer — otherwise render() fails with MjrRect(..., None, None).
     if render_mode == "rgb_array":
-        env.mujoco_renderer.width = 640
-        env.mujoco_renderer.height = 480
+        configure_rgb_array_size(
+            env,
+            record_width if (record_path or screenshot_path) else 640,
+            record_height if (record_path or screenshot_path) else 480,
+        )
+    if render_mode == "human" and render_stride > 1:
+        orig_render = env.render
+        # Create the MuJoCo viewer once before striding. The HSR env's first step
+        # sets viewer options before calling render(), so the viewer must exist.
+        orig_render()
+        render_counter = {"n": 0}
+
+        def _strided_render(*args, **kwargs):
+            render_counter["n"] += 1
+            if render_counter["n"] % render_stride != 0:
+                return None
+            return orig_render(*args, **kwargs)
+
+        env.render = _strided_render
 
     recorder = None
     if record_path:
-        recorder = UltimateLineMp4Recorder(env, record_path, fps=record_fps)
+        recorder = UltimateLineMp4Recorder(env, record_path, fps=record_fps, stride=record_stride)
         recorder.install()
         import atexit
 
@@ -313,18 +412,41 @@ def main():
 
         atexit.register(_mp4_atexit)
 
+    dummy_tidyup = None
     obs, _info = env.reset()
 
     def diag(label: str):
         if transition_diag:
             print_transition_diagnostics(env.unwrapped, label, last_env_action_18)
 
-    for _ in range(warmup):
+    warmup_for_frame = warmup
+    if screenshot_path and args.screenshot_steps is not None:
+        warmup_for_frame = max(0, int(args.screenshot_steps))
+    for _ in range(warmup_for_frame):
         env.step(env.get_hold_action())
         if render_mode == "human":
             env.render()
 
     mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+
+    if screenshot_path:
+        rgb = env.render()
+        save_rgb_array_png(rgb, screenshot_path)
+        print(f"[Screenshot] Wrote {screenshot_path!r} ({record_width}x{record_height})")
+        if recorder is not None:
+            recorder.close()
+            recorder = None
+        preview_cameras_close()
+        if dummy_tidyup is not None:
+            try:
+                dummy_tidyup.close()
+            except Exception:
+                pass
+        try:
+            env.close()
+        except Exception:
+            pass
+        return
     last_env_action_18 = None
     diag("after reset/warmup")
 
@@ -353,6 +475,12 @@ def main():
         print("[Nav] ray_plane waypoints:", {k: waypoints[k] for k in waypoints})
 
     w = waypoints
+    # Fine-tune A pick stance (optional yaml)
+    ap = np.asarray(w["A_pick"]["target_xy"], dtype=np.float64) + a_pick_xy_extra
+    w["A_pick"] = {
+        "target_xy": ap.tolist(),
+        "target_yaw": w["A_pick"]["target_yaw"],
+    }
     # Fine-tune B handover stance (optional yaml)
     bh = np.asarray(w["B_handover_pick"]["target_xy"], dtype=np.float64) + handover_b_xy_extra
     w["B_handover_pick"] = {
@@ -374,7 +502,30 @@ def main():
     )
     diag("after A_pick nav")
 
-    dummy_tidyup = None
+    # Optional: lower Robot A arm_lift slightly before side_pick (navigation keeps arms locked high).
+    if abs(pick_prep_lift_delta_m) > 1e-9:
+        measured_arm = read_arm_joints(env.unwrapped, 0)
+        prep_arm = measured_arm.copy()
+        prep_arm[0] += pick_prep_lift_delta_m
+        grip_prep = read_gripper(env.unwrapped, 0)
+        print(
+            f"[PickPrep] Adjust arm_lift by {pick_prep_lift_delta_m:+.4f} m "
+            f"(before policy): lift {measured_arm[0]:.4f} -> {prep_arm[0]:.4f}"
+        )
+        last_env_action_18 = align_arm_to_pose(
+            env.unwrapped,
+            0,
+            prep_arm,
+            grip_prep,
+            steps=pick_prep_align_steps,
+            smooth_steps=pick_prep_align_smooth_steps,
+            transition_diag=transition_diag,
+            diag_label="pick prep arm_lift before side_pick",
+            seed_prev_action_18=last_env_action_18,
+        )
+        mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
+        diag("after pick prep align")
+
     # Last 18-dim env action — seeds next navigate / policy idle arm (avoids ctrl=q sag at segment boundaries).
     if not args.skip_policies:
         for ck, name in [(ck_pick, "pick"), (ck_hand, "handover"), (ck_place, "place")]:
@@ -437,6 +588,9 @@ def main():
             between_handover_navs_hold_steps,
             force_tight_grip_robots=(0,),
             render_fn=(lambda: env.render()) if render_mode == "human" else None,
+            transition_diag=transition_diag,
+            diag_label="hold between A/B handover navs",
+            seed_prev_action_18=last_env_action_18,
         )
         mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
         diag("after between-handover nav hold")
@@ -478,6 +632,7 @@ def main():
                     )
                     qadr = int(env.unwrapped.model.jnt_qposadr[jid])
                     env.unwrapped.data.qpos[qadr] = float(arm5[j])
+                    env.unwrapped.data.ctrl[robot_index * 9 + 3 + j] = float(arm5[j])
                     # zero velocity for stability
                     vadr = int(env.unwrapped.model.jnt_dofadr[jid])
                     env.unwrapped.data.qvel[vadr] = 0.0
@@ -490,6 +645,7 @@ def main():
                 )
                 qadr = int(env.unwrapped.model.jnt_qposadr[gid])
                 env.unwrapped.data.qpos[qadr] = float(grip1)
+                env.unwrapped.data.ctrl[robot_index * 9 + 8] = float(grip1)
                 vadr = int(env.unwrapped.model.jnt_dofadr[gid])
                 env.unwrapped.data.qvel[vadr] = 0.0
 
@@ -500,7 +656,7 @@ def main():
         print(
             "[Align] Initial qpos override applied (affects interpolation start)."
         )
-    align_arm_to_pose(
+    last_env_action_18 = align_arm_to_pose(
         env.unwrapped,
         0,
         hc.HANDOVER_POSE_A,
@@ -509,9 +665,12 @@ def main():
         smooth_steps=120,
         snap_baton=False,
         hold_start_gripper=True,
+        transition_diag=transition_diag,
+        diag_label="align A to handover pose",
+        seed_prev_action_18=last_env_action_18,
     )
     diag("after A handover align")
-    align_arm_to_pose(
+    last_env_action_18 = align_arm_to_pose(
         env.unwrapped,
         1,
         hc.HANDOVER_POSE_B,
@@ -519,11 +678,12 @@ def main():
         steps=140,
         smooth_steps=120,
         snap_baton=False,
+        transition_diag=transition_diag,
+        diag_label="align B to handover pose",
+        seed_prev_action_18=last_env_action_18,
     )
     diag("after B handover align")
-    # Align changes arms; nav snapshot no longer matches measured pose for policy seeding.
-    last_env_action_18 = None
-    diag("after handover align seed reset")
+    diag("after handover align continuity seed")
 
     if handover_settle_steps > 0:
         print(
@@ -535,6 +695,9 @@ def main():
             handover_settle_steps,
             force_tight_grip_robots=(0,),
             render_fn=(lambda: env.render()) if render_mode == "human" else None,
+            transition_diag=transition_diag,
+            diag_label="hold before handover policy",
+            seed_prev_action_18=last_env_action_18,
         )
         mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
         diag("after handover pre-policy settle")
@@ -552,6 +715,8 @@ def main():
             a_open_cmd=a_open,
             camera_preview=camera_preview,
             freeze_b_base_steps=handover_freeze_b_base_steps,
+            freeze_b_grip_steps=handover_freeze_b_grip_steps,
+            freeze_b_grip_cmd=handover_freeze_b_grip_cmd,
             seed_prev_action_18=last_env_action_18,
             transition_diag=transition_diag,
         )
@@ -573,26 +738,31 @@ def main():
         """Arm pose to match place ckpt init; run after any in-place yaw, before xy drive to goal."""
         nonlocal last_env_action_18
         if b_place_sampling_env in ("b_side_place", "b_side_place_full", "custom"):
+            from robo_manip_baselines.envs.mujoco.hsr import hsr_b_side_place_config as bsp_cfg
+
             print(
                 "[Align] B arm → side_place dataset init "
-                "(bin/handover_config HANDOVER_POSE_A; see hsr_b_side_place_config.ROBOT_POSE)"
+                "(hsr_b_side_place_config.ROBOT_POSE / GRIP_HOLD_SNAP_CMD)"
             )
-            align_arm_to_pose(
+            last_env_action_18 = align_arm_to_pose(
                 env.unwrapped,
                 1,
-                hc.HANDOVER_POSE_A,
-                float(hc.HANDOVER_GRIPPER_A),
+                np.asarray(bsp_cfg.ROBOT_POSE, dtype=np.float64).reshape(5),
+                float(bsp_cfg.GRIP_HOLD_SNAP_CMD),
                 steps=140,
                 smooth_steps=120,
                 snap_baton=False,
                 hold_start_gripper=True,
+                transition_diag=transition_diag,
+                diag_label="align B place prep side_place",
+                seed_prev_action_18=last_env_action_18,
             )
         elif b_place_sampling_env == "tidyup_place":
             tidyup_arm = np.array([0.25, -2.0, 0.0, -1.0, 0.0], dtype=np.float64)
             print(
                 "[Align] B arm → env_hsr_tidyup_place.xml keyframe arm (tidyup_place ckpt); grip open"
             )
-            align_arm_to_pose(
+            last_env_action_18 = align_arm_to_pose(
                 env.unwrapped,
                 1,
                 tidyup_arm,
@@ -601,11 +771,13 @@ def main():
                 smooth_steps=120,
                 snap_baton=False,
                 hold_start_gripper=False,
+                transition_diag=transition_diag,
+                diag_label="align B place prep tidyup",
+                seed_prev_action_18=last_env_action_18,
             )
         else:
             return
         mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
-        last_env_action_18 = None
 
     if b_reorient_to_plus_x:
         bx, by, _ = robot_base_xy_yaw(env.unwrapped, 1)
@@ -709,6 +881,9 @@ def main():
                 force_tight_grip_robots=(1,),
                 render_fn=(lambda: env.render()) if render_mode == "human" else None,
                 arm_integral_gain=place_pre_hold_arm_integral_gain,
+                transition_diag=transition_diag,
+                diag_label="hold before place policy",
+                seed_prev_action_18=last_env_action_18,
             )
             mujoco.mj_forward(env.unwrapped.model, env.unwrapped.data)
             diag("after place pre-policy hold")
@@ -744,12 +919,20 @@ def main():
         80,
         force_tight_grip_robots=(),
         render_fn=(lambda: env.render()) if render_mode == "human" else None,
+        transition_diag=transition_diag,
+        diag_label="final hold",
+        seed_prev_action_18=last_env_action_18,
+        zero_arm_qvel_first=True,
     )
 
     if recorder is not None:
         try:
             recorder.close()
-            print(f"[Record] Wrote {record_path!r}  ({record_fps} fps, rgb_array default free camera)")
+            print(
+                f"[Record] Wrote {record_path!r}  "
+                f"({record_width}x{record_height}, {record_fps} fps, "
+                f"stride={record_stride}, rgb_array default free camera)"
+            )
         except Exception as exc:
             print(f"[Record] Failed to finalize MP4: {exc}")
         finally:

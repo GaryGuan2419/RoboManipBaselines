@@ -11,6 +11,101 @@ from handover_config import ARM_JOINT_NAMES, GRIPPER_JOINT_NAME
 _TIGHT_GRIP_CMD = -0.30
 # Idle robot during align: outer-loop correction toward pose at align start (reduces gravity sag).
 _ALIGN_OTHER_ARM_INTEGRAL_GAIN = 0.06
+# Hold segments inherit only a small anti-gravity command offset from the previous action.
+# This prevents a policy's last active motion command from being replayed as a hold command.
+_HOLD_ARM_CMD_QPOS_MIN = np.array([0.020, 0.018, -0.008, 0.002, -0.006], dtype=np.float64)
+_HOLD_ARM_CMD_QPOS_MAX = np.array([0.040, 0.045, 0.008, 0.014, 0.006], dtype=np.float64)
+
+
+def _palm_zs(env) -> np.ndarray:
+    out = []
+    for prefix in ("robot_a", "robot_b"):
+        palm_id = mujoco.mj_name2id(
+            env.model,
+            mujoco.mjtObj.mjOBJ_BODY,
+            f"{prefix}/hand_palm_link",
+        )
+        out.append(float(env.data.xpos[palm_id][2]))
+    return np.asarray(out, dtype=np.float64)
+
+
+class PalmZSegmentMonitor:
+    """Track min/max palm height inside a phase without printing every step."""
+
+    def __init__(self, env, label: str, enabled: bool = True):
+        self.env = env
+        self.label = label
+        self.enabled = bool(enabled)
+        self.n = 0
+        self.start = None
+        self.end = None
+        self.min_z = None
+        self.max_z = None
+        self.min_step = np.zeros(2, dtype=np.int64)
+        self.max_step = np.zeros(2, dtype=np.int64)
+        if self.enabled:
+            self.sample()
+
+    def sample(self) -> None:
+        if not self.enabled:
+            return
+        z = _palm_zs(self.env)
+        if self.start is None:
+            self.start = z.copy()
+            self.min_z = z.copy()
+            self.max_z = z.copy()
+        else:
+            lower = z < self.min_z
+            higher = z > self.max_z
+            self.min_z[lower] = z[lower]
+            self.max_z[higher] = z[higher]
+            self.min_step[lower] = self.n
+            self.max_step[higher] = self.n
+        self.end = z.copy()
+        self.n += 1
+
+    def finish(self) -> None:
+        if not self.enabled or self.start is None:
+            return
+        print(f"[DiagSeg] {self.label}: samples={self.n}")
+        for idx, name in enumerate(("A", "B")):
+            drop_from_start = float(self.start[idx] - self.min_z[idx])
+            drop_from_peak = float(self.max_z[idx] - self.min_z[idx])
+            end_delta = float(self.end[idx] - self.start[idx])
+            print(
+                f"[DiagSeg]   {name} palm_z start={self.start[idx]:+.4f} "
+                f"min={self.min_z[idx]:+.4f}@{int(self.min_step[idx])} "
+                f"max={self.max_z[idx]:+.4f}@{int(self.max_step[idx])} "
+                f"end={self.end[idx]:+.4f} "
+                f"drop_start={drop_from_start:+.4f} "
+                f"drop_peak={drop_from_peak:+.4f} "
+                f"end-start={end_delta:+.4f}"
+            )
+
+
+def _seed_action_or_ctrl(env, seed_prev_action_18=None):
+    if seed_prev_action_18 is not None:
+        return np.asarray(seed_prev_action_18, dtype=np.float64).reshape(18)
+    if getattr(env.model, "nu", 0) >= 18 and getattr(env.data, "ctrl", None) is not None:
+        return np.asarray(env.data.ctrl[:18], dtype=np.float64).copy()
+    return None
+
+
+def _seed_arm_grip_command(
+    env,
+    robot_index: int,
+    seed_prev_action_18,
+    fallback_arm,
+    fallback_grip,
+):
+    action = _seed_action_or_ctrl(env, seed_prev_action_18)
+    if action is None:
+        return np.asarray(fallback_arm, dtype=np.float64).copy(), float(fallback_grip)
+    off = int(robot_index) * 9
+    return (
+        np.asarray(action[off + 3 : off + 8], dtype=np.float64).copy(),
+        float(action[off + 8]),
+    )
 
 
 def get_arm_qpos_addrs(env, prefix):
@@ -75,6 +170,9 @@ def align_arm_to_pose(
     smooth_steps=80,
     snap_baton=False,
     hold_start_gripper=False,
+    transition_diag=False,
+    diag_label=None,
+    seed_prev_action_18=None,
 ):
     """Smoothly interpolate one robot's arm to target joints. Other robot holds position.
 
@@ -87,12 +185,28 @@ def align_arm_to_pose(
     """
     current_arm = read_arm_joints(env, robot_index)
     current_grip = read_gripper(env, robot_index)
+    current_arm, current_grip = _seed_arm_grip_command(
+        env,
+        robot_index,
+        seed_prev_action_18,
+        current_arm,
+        current_grip,
+    )
     idx_offset = robot_index * 9
+    label = diag_label or f"align robot {robot_index}"
+    seg_mon = PalmZSegmentMonitor(env, label, transition_diag)
 
     # Lock the other robot: hold reference pose at align start + integral vs measured (reduces sag).
     other_idx = 1 - robot_index
     other_ref = read_arm_joints(env, other_idx).copy()
-    other_cmd = other_ref.copy()
+    other_grip = read_gripper(env, other_idx)
+    other_cmd, other_grip_cmd = _seed_arm_grip_command(
+        env,
+        other_idx,
+        seed_prev_action_18,
+        other_ref,
+        other_grip,
+    )
     other_offset = other_idx * 9
 
     def _tight_grip_command(g_qpos: float) -> float:
@@ -100,6 +214,7 @@ def align_arm_to_pose(
         g = float(g_qpos)
         return min(g - 0.18, _TIGHT_GRIP_CMD)
 
+    action = np.zeros(18)
     for t in range(steps):
         alpha = min(1.0, t / max(smooth_steps, 1))
         interp_arm = (1.0 - alpha) * current_arm + alpha * np.asarray(target_arm)
@@ -120,11 +235,17 @@ def align_arm_to_pose(
         # Other robot: hold arm; live grip (open = pass-through, grasp = tight squeeze)
         action[other_offset + 3:other_offset + 8] = other_cmd
         og = read_gripper(env, other_idx)
-        action[other_offset + 8] = _tight_grip_command(og) if og < 0.6 else og
+        if og < 0.6:
+            other_grip_cmd = _tight_grip_command(og)
+        action[other_offset + 8] = other_grip_cmd
 
         env.step(action)
+        seg_mon.sample()
         if snap_baton:
             snap_baton_to_robot_a(env)
+            seg_mon.sample()
+    seg_mon.finish()
+    return action.copy()
 
 
 def print_robot_state(env, robot_index):
@@ -236,6 +357,10 @@ def hold_dual_pose_steps(
     render_fn=None,
     mj_forward_first=True,
     arm_integral_gain: float = 0.06,
+    transition_diag=False,
+    diag_label=None,
+    seed_prev_action_18=None,
+    zero_arm_qvel_first=False,
 ):
     """Hold both arms near the snapshot pose using integral correction (reduces long-hold sag).
 
@@ -245,18 +370,34 @@ def hold_dual_pose_steps(
     """
     if mj_forward_first:
         mujoco.mj_forward(env.model, env.data)
+    seg_mon = PalmZSegmentMonitor(
+        env,
+        diag_label or f"hold_dual_pose_steps n={int(n_steps)}",
+        transition_diag,
+    )
     snap = build_dual_hold_targets_from_current(env, force_tight_grip_robots)
-    locked = {
-        i: {
-            "arm": [float(x) for x in snap[i]["arm"]],
-            "grip": float(snap[i]["grip"]),
-        }
-        for i in (0, 1)
-    }
-    locked_ref = np.zeros((2, 5), dtype=np.float64)
+    locked = {}
     for i in (0, 1):
-        for j in range(5):
-            locked_ref[i, j] = locked[i]["arm"][j]
+        arm_cmd, grip_cmd = _seed_arm_grip_command(
+            env,
+            i,
+            seed_prev_action_18,
+            snap[i]["arm"],
+            snap[i]["grip"],
+        )
+        arm_cmd = np.asarray(arm_cmd, dtype=np.float64).copy()
+        measured_arm = np.asarray(snap[i]["arm"], dtype=np.float64)
+        # A hold segment should preserve small anti-gravity compensation, not continue a
+        # policy's last active motion command.
+        arm_cmd = measured_arm + np.clip(
+            arm_cmd - measured_arm,
+            _HOLD_ARM_CMD_QPOS_MIN,
+            _HOLD_ARM_CMD_QPOS_MAX,
+        )
+        locked[i] = {
+            "arm": [float(x) for x in arm_cmd],
+            "grip": float(grip_cmd),
+        }
     per_robot_arm_addrs = [
         [
             env.model.jnt_qposadr[
@@ -266,6 +407,22 @@ def hold_dual_pose_steps(
         ]
         for pfx in ["robot_a", "robot_b"]
     ]
+    if zero_arm_qvel_first:
+        for pfx in ["robot_a", "robot_b"]:
+            for jname in ARM_JOINT_NAMES:
+                jid = mujoco.mj_name2id(
+                    env.model,
+                    mujoco.mjtObj.mjOBJ_JOINT,
+                    f"{pfx}/{jname}",
+                )
+                vaddr = int(env.model.jnt_dofadr[jid])
+                env.data.qvel[vaddr] = 0.0
+        mujoco.mj_forward(env.model, env.data)
+    locked_ref = np.zeros((2, 5), dtype=np.float64)
+    for i in (0, 1):
+        for j, addr in enumerate(per_robot_arm_addrs[i]):
+            locked_ref[i, j] = float(env.data.qpos[addr])
+    _locked_dict_grip_refresh(env, locked, force_tight_grip_robots)
     last_act = dual_hold_action_from_targets(locked).copy()
     for _ in range(n_steps):
         for i in (0, 1):
@@ -277,6 +434,8 @@ def hold_dual_pose_steps(
         _locked_dict_grip_refresh(env, locked, force_tight_grip_robots)
         last_act = dual_hold_action_from_targets(locked).copy()
         env.step(last_act)
+        seg_mon.sample()
         if render_fn is not None:
             render_fn()
+    seg_mon.finish()
     return last_act

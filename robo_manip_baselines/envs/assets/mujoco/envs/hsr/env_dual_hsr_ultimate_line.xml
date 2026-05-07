@@ -149,8 +149,8 @@
                               <inertial pos="0.011116 0.005679 0.017532" mass="0.001" diaginertia="0 0 0" />
                               
                               <geom class="visual" type="mesh" mesh="l_distal" material="hsr_black" />
-                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.03" friction="0.7 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
-                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.015" friction="0.6 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.03" friction="1.5 0.15 0.02" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.015" friction="1.5 0.15 0.02" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
                               <body name="robot_a/hand_l_finger_tip_frame" pos="0.01675 0.01865 0.04289" quat="0.707107 -0.707107 0 0">
                                 <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
                               </body>
@@ -175,8 +175,8 @@
                               <inertial pos="0.014256 -0.008321 0.015591" mass="0.001" diaginertia="0.001 0.001 0.001" />
                               
                               <geom class="visual" type="mesh" mesh="r_distal" material="hsr_black" />
-                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.03" friction="0.7 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
-                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.015" friction="0.6 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.03" friction="1.5 0.15 0.02" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.015" friction="1.5 0.15 0.02" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
                               <body name="robot_a/hand_r_finger_tip_frame" pos="0.01675 -0.01865 0.04289" quat="0.707107 0.707107 0 0">
                                 <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
                               </body>
@@ -315,8 +315,8 @@
                               <inertial pos="0.011116 0.005679 0.017532" mass="0.001" diaginertia="0 0 0" />
                               
                               <geom class="visual" type="mesh" mesh="l_distal" material="hsr_black" />
-                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.03" friction="0.7 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
-                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.015" friction="0.6 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.03" friction="1.5 0.15 0.02" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 0.005 0.015" friction="1.5 0.15 0.02" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
                               <body name="robot_b/hand_l_finger_tip_frame" pos="0.01675 0.01865 0.04289" quat="0.707107 -0.707107 0 0">
                                 <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
                               </body>
@@ -341,8 +341,8 @@
                               <inertial pos="0.014256 -0.008321 0.015591" mass="0.001" diaginertia="0.001 0.001 0.001" />
                               
                               <geom class="visual" type="mesh" mesh="r_distal" material="hsr_black" />
-                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.03" friction="0.7 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
-                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.015" friction="0.6 0.05 0.005" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.03" friction="1.5 0.15 0.02" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
+                              <geom class="collision" type="box" size="0.02 0.01 0.0075" pos="0.017 -0.005 0.015" friction="1.5 0.15 0.02" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" />
                               <body name="robot_b/hand_r_finger_tip_frame" pos="0.01675 -0.01865 0.04289" quat="0.707107 0.707107 0 0">
                                 <inertial pos="0 0 0" mass="0.001" diaginertia="0.001 0.001 0.001" />
                               </body>
@@ -367,7 +367,7 @@
       </body>
     </body>
   </body>
-<body name="bottle2" pos="-2.0 0.0 0.01"><freejoint name="bottle2_freejoint" /><geom name="baton_upper" type="box" size="0.025 0.025 0.035" pos="0 0 0.105" rgba="0.95 0.08 0.08 1" condim="4" friction="1.5 0.05 0.005" solimp="0.95 0.99 0.001" solref="0.004 1" /><geom name="baton_lower" type="box" size="0.025 0.025 0.035" pos="0 0 0.035" rgba="0.08 0.2 0.95 1" condim="4" friction="1.5 0.05 0.005" solimp="0.95 0.99 0.001" solref="0.004 1" /></body><body name="handover_area" pos="0.0 0.0 0.0" mocap="true"><geom type="box" size="0.08 0.08 0.002" rgba="0 0.85 0.2 0.55" contype="0" conaffinity="0" /></body><body name="target_area" pos="2.0 0.0 0.0" mocap="true"><geom type="box" size="0.10 0.10 0.003" rgba="0.15 0.35 1.0 0.75" contype="0" conaffinity="0" /></body>
+<body name="bottle2" pos="-2.0 0.0 0.01"><freejoint name="bottle2_freejoint" /><geom name="baton_upper" type="box" size="0.025 0.025 0.035" pos="0 0 0.105" rgba="0.95 0.08 0.08 1" condim="4" friction="2.0 0.18 0.025" solimp="0.98 0.995 0.0005" solref="0.0025 1.0" /><geom name="baton_lower" type="box" size="0.025 0.025 0.035" pos="0 0 0.035" rgba="0.08 0.2 0.95 1" condim="4" friction="2.0 0.18 0.025" solimp="0.98 0.995 0.0005" solref="0.0025 1.0" /></body><body name="handover_area" pos="0.0 0.0 0.0" mocap="true"><geom type="box" size="0.08 0.08 0.002" rgba="0 0.85 0.2 0.55" contype="0" conaffinity="0" /></body><body name="target_area" pos="2.0 0.0 0.0" mocap="true"><geom type="box" size="0.10 0.10 0.003" rgba="0.15 0.35 1.0 0.75" contype="0" conaffinity="0" /></body>
 <!-- Handover (same framing vs handover_area as env_dual_hsr_demo.xml): dual handover x=1.0 -> ultimate x=0, shift (-1,0,0). -->
 <camera name="side_view" pos="-0.45 -0.7 0.35" xyaxes="1 0 0 0 0.3 1" fovy="65" />
 <camera name="overhead_view" pos="-1.2 0 3.0" xyaxes="0 -1 0 1 0 0" fovy="70" />

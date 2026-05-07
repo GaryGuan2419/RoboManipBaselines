@@ -11,15 +11,15 @@ import numpy as np
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── Robot A (holding baton, facing +X) ────────────────────────────────────────
-HANDOVER_BASE_A = np.array([0.55, -0.0800, 0.0000])   # x, y, yaw
-HANDOVER_POSE_A = np.array([0.30, -2.4996, 0.0108, 1.08, 0.0048])
+HANDOVER_BASE_A = np.array([0.52, -0.0800, 0.0000])   # x, y, yaw
+HANDOVER_POSE_A = np.array([0.26, -2.4996, 0.0108, 1.08, 0.0])
 HANDOVER_GRIPPER_A = -0.15   # command (actual ≈0.19 blocked by baton; negative → squeeze)
 
 # ── Robot B (ready to receive, facing -X) ─────────────────────────────────────
 HANDOVER_BASE_B = np.array([1.65, 0.0768, 3.1416])    # x, y, yaw
 # Joint order: [arm_lift, arm_flex, arm_roll, wrist_flex, wrist_roll]
 # wrist_flex: 增大→手腕向下弯, 减小→手腕上扬 (0 ~ π, 当前≈0.99rad)
-HANDOVER_POSE_B = np.array([0.1787, -2.5480, 0.0102, 1.08, 0.0052])
+HANDOVER_POSE_B = np.array([0.1787, -2.5480, 0.0102, 1.08, 0.0])
 HANDOVER_GRIPPER_B_OPEN = 0.8
 
 # ── Baton ─────────────────────────────────────────────────────────────────────

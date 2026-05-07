@@ -111,6 +111,9 @@ Task to tidy up objects on the floor.
 
 https://github.com/user-attachments/assets/2e5aef49-10da-4cf5-ba8a-1c9240672eff
 
+#### MujocoHsrGroundBatonGrasp
+Task to pick a **horizontal** (lying) relay baton on the ground with HSR, same robot scene as Tidyup but the baton long axis is on the floor (`env_hsr_ground_baton.xml`).
+
 ### Unitree G1
 #### MujocoG1Bottles
 Task to grasp and manipulate bottles.

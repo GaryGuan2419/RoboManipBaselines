@@ -27,6 +27,7 @@ from .aloha.MujocoAlohaHandoverEnv import MujocoAlohaHandoverEnv
 
 from .hsr.MujocoHsrTidyupEnv import MujocoHsrTidyupEnv
 from .hsr.MujocoHsrTidyupPlaceEnv import MujocoHsrTidyupPlaceEnv
+from .hsr.MujocoHsrGroundBatonGraspEnv import MujocoHsrGroundBatonGraspEnv
 from .hsr.MujocoHsrBSidePlaceEnv import MujocoHsrBSidePlaceEnv
 from .hsr.MujocoDualHsrHandoverReceiveEnv import MujocoDualHsrHandoverReceiveEnv
 from .hsr.MujocoDualHsrUltimateLineEnv import MujocoDualHsrUltimateLineEnv

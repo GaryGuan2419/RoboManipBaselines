@@ -19,6 +19,22 @@ from ..MujocoEnvBase import MujocoEnvBase
 
 
 class MujocoHsrEnvBase(MujocoEnvBase):
+    # reset 内额外 mj_step 的次数。默认 0：不积分，机臂在数值上=你写的 init，不会出现「先掉一截」。
+    # 若需让 free 物体(如瓶)在开局略 settle，可设 >0，并配合「机臂位姿每步回写 init」
+    # （见 reset_kinematic_clamp_robot）。
+    reset_settle_physics_steps = 0
+    # True：在 reset 的每个子步后把「机器人+手指 mimic」(bottle2 之前) 的 qpos/qvel 强写回 init，机臂
+    # 不随积分漂移；仅 bottle2 等外物体在子步内会动。False：普通物理积分(旧式 settle，机臂会漂到平衡)。
+    reset_kinematic_clamp_robot = True
+    # 缓存：bottle2_freejoint 的 qpos / 起始 qvel 下标（在 setup 后、首次 reset 时填充）
+    _bottle2_qpos0 = -1
+    _bottle2_dof0 = -1
+    # 每次 reset 后、前 N 个 env.step：把 actuation 中「位置致动器」段 ctrl[3:9] 强设为 init，与
+    # init_qpos[3:9] 完全一致，消掉首帧/遥操作 sync 与真值 1e-5 级误差 → PD 首段几乎零跟踪误差，避免
+    # 「窗口已开、第一刀仿真里胳膊再沉一下再稳住」。底座仍是速度段 action[0:3]，不受影响。
+    # 设 0 可关闭。若初值本身在重力下非静力平衡，仍会随时间微漂（物理正常）。
+    arm_ctrl_lock_steps_after_reset = 2
+
     default_camera_config = {
         "azimuth": -120.0,
         "elevation": -25.0,
@@ -37,8 +53,25 @@ class MujocoHsrEnvBase(MujocoEnvBase):
     def setup_robot(self, init_qpos):
         self.init_qpos[: len(init_qpos)] = init_qpos
         self.init_qvel[:] = 0.0
+        # hand_l/r_proximal 在 XML 里以 equality 与 hand_motor 1:1 绑死；Gym 首帧 data.qpos 的 9,10
+        # 常未被 init_qpos[0:8] 覆盖，若电机为开而两 mimic 为 0，会违反约束。reset 的 mj_forward/首步
+        # 上才会“弹”到一致，看起来就像夹爪先合再开。这里显式与电机对齐。
+        if self.init_qpos.shape[0] >= 11:
+            h8 = float(self.init_qpos[8])
+            self.init_qpos[9] = h8
+            self.init_qpos[10] = h8
 
         mujoco.mj_kinematics(self.model, self.data)
+
+        try:
+            b_id = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_JOINT, "bottle2_freejoint"
+            )
+            self._bottle2_qpos0 = int(self.model.jnt_qposadr[b_id])
+            self._bottle2_dof0 = int(self.model.jnt_dofadr[b_id])
+        except (ValueError, Exception):
+            self._bottle2_qpos0 = int(self.model.nq)
+            self._bottle2_dof0 = int(self.model.nv)
 
         self.body_config_list = [
             ArmConfig(
@@ -114,6 +147,42 @@ class MujocoHsrEnvBase(MujocoEnvBase):
     def command_keys_for_step(self):
         return [DataKey.COMMAND_MOBILE_OMNI_VEL, DataKey.COMMAND_JOINT_POS]
 
+    def reset(self, **kwargs):
+        obs, info = super().reset(**kwargs)
+        self._arm_ctrl_lock_remaining = int(
+            getattr(self, "arm_ctrl_lock_steps_after_reset", 0) or 0
+        )
+        return obs, info
+
+    def reset_model(self):
+        self.set_state(self.init_qpos, self.init_qvel)
+        nu = len(self.data.ctrl)
+        self.data.ctrl[:] = self.init_qpos[:nu]
+        bq = getattr(self, "_bottle2_qpos0", -1)
+        if bq < 0:
+            bq, bv = int(self.model.nq), int(self.model.nv)
+        else:
+            bv = int(self._bottle2_dof0)
+        n = int(getattr(self, "reset_settle_physics_steps", 0) or 0)
+        do_clamp = bool(getattr(self, "reset_kinematic_clamp_robot", True))
+        ctrl_hold = self.data.ctrl.copy()
+        for _ in range(n):
+            self.data.ctrl[:] = ctrl_hold
+            mujoco.mj_step(self.model, self.data, nstep=1)
+            if do_clamp:
+                self.data.qpos[0:bq] = self.init_qpos[0:bq]
+                self.data.qvel[0:bv] = 0.0
+                self.data.ctrl[:] = ctrl_hold
+            mujoco.mj_forward(self.model, self.data)
+        if n == 0 and do_clamp:
+            # 再同步一次，确保 init 与 keyframe/ctrl 完全一致（无子步时唯一一次 forward 已在 set_state 里做过）
+            self.data.qpos[0:bq] = self.init_qpos[0:bq]
+            self.data.qvel[0:bv] = 0.0
+            self.data.ctrl[:] = ctrl_hold
+            mujoco.mj_forward(self.model, self.data)
+        mujoco.mj_rnePostConstraint(self.model, self.data)
+        return self._get_obs()
+
     @property
     def measured_keys_to_save(self):
         return [
@@ -142,6 +211,10 @@ class MujocoHsrEnvBase(MujocoEnvBase):
         # We skip camera rendering here and only render images on-demand via `get_images()`
         # (TeleopBase already re-fetches images right before recording/display).
         action_copy = np.asarray(action, dtype=np.float64).copy()
+        r = int(getattr(self, "_arm_ctrl_lock_remaining", 0) or 0)
+        if r > 0 and action_copy.shape[0] >= 9:
+            action_copy[3:9] = self.init_qpos[3:9].copy()
+            self._arm_ctrl_lock_remaining = r - 1
         action_copy[0:3] = self.convert_mobile_vel_frame(
             action_copy[0:3], world_to_local=False
         )

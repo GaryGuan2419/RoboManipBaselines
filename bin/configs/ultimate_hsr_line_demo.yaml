@@ -16,6 +16,23 @@ warmup_hold_steps: 50
 pick_skill_steps: 60
 handover_skill_steps: 150
 place_skill_steps: 30
+
+# Fine-tune A's base position before the normal side_pick policy.
+# The default computed pick pose is:
+#   A_pick_xy = bottle2_xy - [0.546, 0.08]
+# This extra is world-frame [dx, dy] in meters.
+# Examples:
+#   [-0.02, 0.0] = A stands 2 cm farther behind the baton along -X
+#   [ 0.02, 0.0] = A stands 2 cm closer/forward along +X
+#   [ 0.0, 0.02] = A shifts 2 cm toward +Y
+a_pick_xy_extra: [0.0, 0.0]
+
+# Before side_pick policy: optionally lower Robot A arm_lift (meters). Negative = palm lower.
+# Navigation ends with arms locked; this short align nudges lift so the policy starts closer to the baton.
+pick_prep_arm_lift_delta_m: -0.04
+pick_prep_align_steps: 90
+pick_prep_align_smooth_steps: 75
+
 # After arm align, hold physics before place policy (reduces first-step grip/arm jerk vs teleop start).
 place_pre_policy_hold_steps: 24
 # First N place-policy steps: B gripper cmd is overridden (tight-hold); longer N = longer lock
@@ -38,6 +55,8 @@ b_handover_nav_arrival_blend_steps: 6
 handover_settle_steps: 40
 # First N handover policy steps: zero B chassis cmd (arm+grip from policy). 0 = off.
 handover_freeze_b_base_steps: 0
+# First N handover policy steps: freeze B gripper cmd. 0 = off.
+handover_freeze_b_grip_steps: 0
 
 # Policy checkpoints (paths relative to repo root). Use side_* 与数据采集一致。
 checkpoint_pick: robo_manip_baselines/checkpoint/ManiFlowPolicy/hsr_side_pick/policy_best.ckpt

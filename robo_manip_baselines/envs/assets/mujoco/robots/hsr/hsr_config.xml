@@ -47,7 +47,7 @@
     <position class="hsr" kp="10" name="arm_roll_joint" joint="arm_roll_joint"/>
     <position class="hsr" kp="100" name="wrist_flex_joint" joint="wrist_flex_joint"/>
     <position class="hsr" kp="10" name="wrist_roll_joint" joint="wrist_roll_joint"/>
-    <position class="hsr" kp="10" name="hand_motor_joint" joint="hand_motor_joint"/>
+    <position class="hsr" kp="20" name="hand_motor_joint" joint="hand_motor_joint"/>
   </actuator>
 
   <sensor>

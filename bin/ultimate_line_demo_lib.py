@@ -5,8 +5,6 @@ from __future__ import annotations
 import mujoco
 import numpy as np
 
-from handover_utils import build_dual_hold_targets_from_current, dual_hold_action_from_targets
-
 # OpenCV preview window names (destroyed between policy phases).
 _CV_PREVIEW_WINDOWS = []
 
@@ -29,6 +27,94 @@ _ARM_JOINT_NAMES = (
     "wrist_flex_joint",
     "wrist_roll_joint",
 )
+
+
+def _seed_action_or_ctrl(env, seed_prev_action_18: np.ndarray | None = None):
+    if seed_prev_action_18 is not None:
+        return np.asarray(seed_prev_action_18, dtype=np.float64).reshape(18)
+    if getattr(env.model, "nu", 0) >= 18 and getattr(env.data, "ctrl", None) is not None:
+        return np.asarray(env.data.ctrl[:18], dtype=np.float64).copy()
+    return None
+
+
+def _seed_arm_grip_command(
+    env,
+    robot_index: int,
+    seed_prev_action_18: np.ndarray | None,
+    fallback_arm,
+    fallback_grip,
+):
+    action = _seed_action_or_ctrl(env, seed_prev_action_18)
+    if action is None:
+        return [float(x) for x in fallback_arm], float(fallback_grip)
+    off = int(robot_index) * 9
+    return [float(x) for x in action[off + 3 : off + 8]], float(action[off + 8])
+
+
+def _palm_zs(env) -> np.ndarray:
+    out = []
+    for prefix in ("robot_a", "robot_b"):
+        palm_id = mujoco.mj_name2id(
+            env.model,
+            mujoco.mjtObj.mjOBJ_BODY,
+            f"{prefix}/hand_palm_link",
+        )
+        out.append(float(env.data.xpos[palm_id][2]))
+    return np.asarray(out, dtype=np.float64)
+
+
+class PalmZSegmentMonitor:
+    """Track min/max palm height inside a phase without printing every step."""
+
+    def __init__(self, env, label: str, enabled: bool = True):
+        self.env = env
+        self.label = label
+        self.enabled = bool(enabled)
+        self.n = 0
+        self.start = None
+        self.end = None
+        self.min_z = None
+        self.max_z = None
+        self.min_step = np.zeros(2, dtype=np.int64)
+        self.max_step = np.zeros(2, dtype=np.int64)
+        if self.enabled:
+            self.sample()
+
+    def sample(self) -> None:
+        if not self.enabled:
+            return
+        z = _palm_zs(self.env)
+        if self.start is None:
+            self.start = z.copy()
+            self.min_z = z.copy()
+            self.max_z = z.copy()
+        else:
+            lower = z < self.min_z
+            higher = z > self.max_z
+            self.min_z[lower] = z[lower]
+            self.max_z[higher] = z[higher]
+            self.min_step[lower] = self.n
+            self.max_step[higher] = self.n
+        self.end = z.copy()
+        self.n += 1
+
+    def finish(self) -> None:
+        if not self.enabled or self.start is None:
+            return
+        print(f"[DiagSeg] {self.label}: samples={self.n}")
+        for idx, name in enumerate(("A", "B")):
+            drop_from_start = float(self.start[idx] - self.min_z[idx])
+            drop_from_peak = float(self.max_z[idx] - self.min_z[idx])
+            end_delta = float(self.end[idx] - self.start[idx])
+            print(
+                f"[DiagSeg]   {name} palm_z start={self.start[idx]:+.4f} "
+                f"min={self.min_z[idx]:+.4f}@{int(self.min_step[idx])} "
+                f"max={self.max_z[idx]:+.4f}@{int(self.max_step[idx])} "
+                f"end={self.end[idx]:+.4f} "
+                f"drop_start={drop_from_start:+.4f} "
+                f"drop_peak={drop_from_peak:+.4f} "
+                f"end-start={end_delta:+.4f}"
+            )
 
 
 def print_transition_diagnostics(env, label: str, last_action_18=None) -> None:
@@ -186,10 +272,9 @@ def navigate_to_dual(
     hold), arm+grip *commands* start there while ``locked_ref_arm`` stays the measured pose at nav
     entry — avoids ``ctrl <- qpos`` sag at segment boundaries.
 
-    If ``arrival_blend_steps`` > 0, after reaching the goal we linearly blend the last navigation
-    command into the measured-qpos snap hold over that many steps (zero base velocity), then run
-    ``post_arrival_hold_steps`` snap holds. This reduces the jerk from an abrupt switch out of the
-    nav integral loop into a fixed snap target.
+    If ``arrival_blend_steps`` > 0, after reaching the goal we linearly zero base velocity while
+    preserving the compensated arm commands from navigation. ``post_arrival_hold_steps`` then keeps
+    running the same arm-lock integral instead of snapping arm commands back to measured qpos.
 
     Returns:
         (success, last_action_18) — last full action sent to ``env.step`` (including post-arrival hold).
@@ -198,6 +283,11 @@ def navigate_to_dual(
     print(
         f"\n[Navigation] Robot {robot_name} -> "
         f"xy=({target_xy[0]:.3f},{target_xy[1]:.3f}) yaw={target_yaw:.3f}"
+    )
+    seg_mon = PalmZSegmentMonitor(
+        env,
+        f"nav {robot_name} to ({target_xy[0]:.3f},{target_xy[1]:.3f}) yaw={target_yaw:.3f}",
+        transition_diag,
     )
 
     prefix = "robot_a" if robot_index == 0 else "robot_b"
@@ -219,6 +309,7 @@ def navigate_to_dual(
 
     force_tight_set = set(force_tight_grip_robots)
     locked = {}
+    measured_ref_arm = np.zeros((2, 5), dtype=np.float64)
     for i, pfx in enumerate(["robot_a", "robot_b"]):
         offset = i * 9
         arm_addrs = [
@@ -227,15 +318,24 @@ def navigate_to_dual(
             ]
             for j in arm_joint_names
         ]
+        measured_arm = [float(env.data.qpos[addr]) for addr in arm_addrs]
         if lock_arm_to_init:
             locked_arm = [env.init_qpos[addr] for addr in arm_addrs]
         else:
-            locked_arm = [env.data.qpos[addr] for addr in arm_addrs]
+            locked_arm = measured_arm
 
         locked_grip_addr = env.model.jnt_qposadr[
             mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{pfx}/hand_motor_joint")
         ]
         locked_grip = env.data.qpos[locked_grip_addr]
+        if not lock_arm_to_init:
+            locked_arm, locked_grip = _seed_arm_grip_command(
+                env,
+                i,
+                seed_prev_action_18,
+                locked_arm,
+                locked_grip,
+            )
 
         if i in force_tight_set:
             locked_grip = min(locked_grip - 0.18, _TIGHT_GRIP_CMD)
@@ -243,6 +343,7 @@ def navigate_to_dual(
             locked_grip -= 0.1
 
         locked[i] = {"arm": locked_arm, "grip": locked_grip, "offset": offset}
+        measured_ref_arm[i, :] = measured_arm
 
     per_robot_arm_addrs = [
         [
@@ -256,16 +357,17 @@ def navigate_to_dual(
     locked_ref_arm = np.zeros((2, 5), dtype=np.float64)
     for i in (0, 1):
         for j in range(5):
-            locked_ref_arm[i, j] = float(locked[i]["arm"][j])
-
-    if seed_prev_action_18 is not None:
-        sa = np.asarray(seed_prev_action_18, dtype=np.float64).reshape(18)
-        for i, off in ((0, 0), (1, 9)):
-            for j in range(5):
-                locked[i]["arm"][j] = float(sa[off + 3 + j])
-            locked[i]["grip"] = float(sa[off + 8])
+            locked_ref_arm[i, j] = float(measured_ref_arm[i, j])
 
     last_action = np.zeros(18, dtype=np.float64)
+
+    def _locked_hold_action() -> np.ndarray:
+        action = np.zeros(18, dtype=np.float64)
+        for i in range(2):
+            o = locked[i]["offset"]
+            action[o + 3 : o + 8] = locked[i]["arm"]
+            action[o + 8] = locked[i]["grip"]
+        return action
 
     for step in range(max_steps):
         current_x = env.data.qpos[qpos_adrs[0]]
@@ -302,35 +404,34 @@ def navigate_to_dual(
                 action[o + 8] = locked[i]["grip"]
             last_action = action.copy()
             env.step(action)
+            seg_mon.sample()
             continue
 
         if dist_err < 0.005 and yaw_err_abs < 0.01:
             print(f"[Navigation] Robot {robot_name} arrived in {step} steps.")
             mujoco.mj_forward(env.model, env.data)
-            # Re-snap arm+grip targets to **measured** qpos so PD does not fight stale nav-start
-            # lock (reduces end-of-nav sag / jerk).
-            snap = build_dual_hold_targets_from_current(env, force_tight_grip_robots)
-            snap_act = dual_hold_action_from_targets(snap)
             pre_arrival = last_action.astype(np.float64, copy=True)
+            hold_act = _locked_hold_action()
             if transition_diag:
                 print_transition_diagnostics(
                     env,
-                    f"nav {robot_name}: arrived before snap/blend",
+                    f"nav {robot_name}: arrived before base-stop blend",
                     pre_arrival,
                 )
             bn = max(0, int(arrival_blend_steps))
             if bn > 0:
                 print(
                     f"[Navigation] Robot {robot_name} arrival blend: {bn} steps "
-                    f"-> snap, then hold {int(post_arrival_hold_steps)}."
+                    f"-> zero base, then compensated hold {int(post_arrival_hold_steps)}."
                 )
                 for t in range(bn):
                     alpha = float(t + 1) / float(max(bn, 1))
-                    blended = (1.0 - alpha) * pre_arrival + alpha * snap_act
+                    blended = (1.0 - alpha) * pre_arrival + alpha * hold_act
                     blended[0:3] = 0.0
                     blended[9:12] = 0.0
                     last_action = blended.copy()
                     env.step(last_action)
+                    seg_mon.sample()
                 if transition_diag:
                     print_transition_diagnostics(
                         env,
@@ -338,14 +439,24 @@ def navigate_to_dual(
                         last_action,
                     )
             for _ in range(max(0, int(post_arrival_hold_steps))):
-                last_action = dual_hold_action_from_targets(snap).copy()
+                _refresh_arm_lock_integral(
+                    env,
+                    locked,
+                    locked_ref_arm,
+                    per_robot_arm_addrs,
+                    _NAV_ARM_LOCK_INTEGRAL_GAIN,
+                )
+                _refresh_locked_grip_from_qpos(env, locked, force_tight_grip_robots)
+                last_action = _locked_hold_action()
                 env.step(last_action)
+                seg_mon.sample()
             if transition_diag:
                 print_transition_diagnostics(
                     env,
                     f"nav {robot_name}: after post-arrival hold",
                     last_action,
                 )
+            seg_mon.finish()
             return True, last_action
 
         v_x_global = kp_pos * err_x
@@ -376,8 +487,10 @@ def navigate_to_dual(
 
         last_action = action.copy()
         env.step(action)
+        seg_mon.sample()
 
     print("[Navigation] WARNING: max steps reached.")
+    seg_mon.finish()
     return False, last_action
 
 
@@ -572,6 +685,11 @@ def execute_skill_dual(
 ):
     robot_name = "A" if robot_index == 0 else "B"
     print(f"\n[Skill] Robot {robot_name} '{skill_name}' ({max_steps} steps)")
+    seg_mon = PalmZSegmentMonitor(
+        env,
+        f"policy {robot_name}_{skill_name}",
+        transition_diag,
+    )
 
     preview_cameras_close()
     obs = env._get_obs()
@@ -673,6 +791,7 @@ def execute_skill_dual(
                 last_full,
             )
         obs, _r, _t, _tr, _i = env.step(full_action)
+        seg_mon.sample()
         if transition_diag and _step in diag_steps:
             print_transition_diagnostics(
                 env,
@@ -680,6 +799,7 @@ def execute_skill_dual(
                 last_full,
             )
 
+    seg_mon.finish()
     preview_cameras_close()
     print(
         f"[Skill] Robot {robot_name} done. grip_qpos={float(env.data.qpos[grip_addr]):.4f}"
@@ -698,6 +818,8 @@ def execute_handover_b_release_a_when_closed(
     *,
     camera_preview=None,
     freeze_b_base_steps: int = 0,
+    freeze_b_grip_steps: int = 0,
+    freeze_b_grip_cmd: float | None = None,
     seed_prev_action_18: np.ndarray | None = None,
     transition_diag: bool = False,
 ):
@@ -705,6 +827,11 @@ def execute_handover_b_release_a_when_closed(
     print(
         f"\n[Handover] B policy '{skill_name}' + release A when "
         f"g_B<={b_grip_takeover_qpos} for {release_dwell_steps} steps"
+    )
+    seg_mon = PalmZSegmentMonitor(
+        env,
+        f"policy B_{skill_name}",
+        transition_diag,
     )
     if freeze_b_base_steps > 0:
         print(
@@ -740,6 +867,17 @@ def execute_handover_b_release_a_when_closed(
     b_grip_addr = env.model.jnt_qposadr[
         mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, "robot_b/hand_motor_joint")
     ]
+    freeze_b_grip_cmd_eff = None
+    if freeze_b_grip_steps > 0:
+        g0 = float(env.data.qpos[b_grip_addr])
+        if freeze_b_grip_cmd is None:
+            freeze_b_grip_cmd_eff = float(min(g0 - 0.18, _TIGHT_GRIP_CMD))
+        else:
+            freeze_b_grip_cmd_eff = float(freeze_b_grip_cmd)
+        print(
+            f"[Handover] First {freeze_b_grip_steps} steps: B gripper cmd frozen at "
+            f"{freeze_b_grip_cmd_eff:.4f} (qpos0={g0:.4f})."
+        )
 
     dwell = 0
     released = False
@@ -763,6 +901,8 @@ def execute_handover_b_release_a_when_closed(
         full_action[9:18] = single_action
         if freeze_b_base_steps > 0 and _step < freeze_b_base_steps:
             full_action[9:12] = 0.0
+        if freeze_b_grip_steps > 0 and _step < freeze_b_grip_steps and freeze_b_grip_cmd_eff is not None:
+            full_action[17] = freeze_b_grip_cmd_eff
         full_action[3:8] = a_arm_hold
         g_b = float(env.data.qpos[b_grip_addr])
         if not released:
@@ -791,6 +931,7 @@ def execute_handover_b_release_a_when_closed(
                 last_full,
             )
         obs, _r, _t, _tr, _i = env.step(full_action)
+        seg_mon.sample()
         if transition_diag and _step in diag_steps:
             print_transition_diagnostics(
                 env,
@@ -803,6 +944,7 @@ def execute_handover_b_release_a_when_closed(
             )
             break
 
+    seg_mon.finish()
     if not released:
         print("[Handover] WARNING: A not released (B gripper threshold not met).")
     preview_cameras_close()

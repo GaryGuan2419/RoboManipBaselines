@@ -105,6 +105,10 @@ register(
     entry_point="robo_manip_baselines.envs.mujoco:MujocoHsrTidyupPlaceEnv",
 )
 register(
+    id="robo_manip_baselines/MujocoHsrGroundBatonGraspEnv-v0",
+    entry_point="robo_manip_baselines.envs.mujoco:MujocoHsrGroundBatonGraspEnv",
+)
+register(
     id="robo_manip_baselines/MujocoHsrBSidePlaceEnv-v0",
     entry_point="robo_manip_baselines.envs.mujoco:MujocoHsrBSidePlaceEnv",
 )
