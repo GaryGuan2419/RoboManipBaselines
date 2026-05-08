@@ -48,6 +48,7 @@ class RolloutPhase(PhaseBase):
 
         self.op.rollout_time_idx = 0
         self.success_time = None
+        self.op._pick_eval_rollout_finalized = False
         print(
             f"[{self.op.__class__.__name__}] Start policy rollout. Press the 'n' key to finish policy rollout."
         )
@@ -69,11 +70,29 @@ class RolloutPhase(PhaseBase):
 
         self.op.rollout_time_idx += 1
 
+        env_u = self.op.env.unwrapped
+        n_policy = getattr(env_u, "pick_eval_max_policy_action_steps", None)
+        if (
+            n_policy is not None
+            and not getattr(self.op, "_pick_eval_rollout_finalized", False)
+            and hasattr(self.op, "policy_action_list")
+            and len(self.op.policy_action_list) >= int(n_policy)
+        ):
+            reward, info_pick = env_u.compute_pick_eval_outcome(
+                policy_action_step_count=len(self.op.policy_action_list)
+            )
+            self.op.reward = float(reward)
+            base = self.op.info if isinstance(self.op.info, dict) else {}
+            self.op.info = {**base, **info_pick}
+            self.op._pick_eval_rollout_finalized = True
+
     def check_transition(self):
         elapsed_duration = self.get_elapsed_duration()
 
         transition_flag = False
         if self.op.key == ord("n"):
+            transition_flag = True
+        elif self.op.info is not None and self.op.info.get("rollout_pick_eval_done"):
             transition_flag = True
         elif self.op.args.auto_exit:
             if (self.op.reward >= 1.0) and (self.success_time is None):
@@ -230,6 +249,16 @@ class RolloutBase(OperationDataMixin, ABC):
             type=str,
             default=None,
             help="list of randomization factors applied to simulation world (no randomness by default)",
+        )
+        parser.add_argument(
+            "--bottle_xy_reset_perturb_half_extent_m",
+            type=float,
+            default=None,
+            help=(
+                "If set, override MujocoHsrTidyupEnv XY bottle reset half-extent [m] before each "
+                "modify_world (per-axis U[-h,h], square about (2h)×(2h) cm). "
+                "None = keep gym.make / Operation default."
+            ),
         )
 
         parser.add_argument(
@@ -490,7 +519,9 @@ class RolloutBase(OperationDataMixin, ABC):
             if self.args.save_rollout and self.phase_manager.is_phase("RolloutPhase"):
                 self.record_data()
 
-            self.obs, self.reward, _, _, self.info = self.env.step(env_action)
+            self.obs, self.reward, terminated, truncated, self.info = self.env.step(
+                env_action
+            )
 
             self.phase_manager.post_update()
 
@@ -535,6 +566,12 @@ class RolloutBase(OperationDataMixin, ABC):
 
         # Reset environment
         self.env.unwrapped.world_random_scale = self.args.world_random_scale
+        if getattr(self.args, "bottle_xy_reset_perturb_half_extent_m", None) is not None:
+            u = self.env.unwrapped
+            if hasattr(u, "bottle_xy_reset_perturb_half_extent_m"):
+                u.bottle_xy_reset_perturb_half_extent_m = float(
+                    self.args.bottle_xy_reset_perturb_half_extent_m
+                )
         world_idx = self.args.world_idx_list[self.data_manager.episode_idx]
         self.data_manager.setup_env_world(world_idx)
         self.obs, self.info = self.env.reset(seed=self.args.seed)
@@ -555,6 +592,7 @@ class RolloutBase(OperationDataMixin, ABC):
 
         # Reset variables
         self.reset_variables()
+        self._pick_eval_rollout_finalized = False
 
     @abstractmethod
     def infer_policy(self):
@@ -664,7 +702,8 @@ class RolloutBase(OperationDataMixin, ABC):
         history_size = 100
         ax.plot(self.policy_action_list[-1 * history_size :] * self.action_plot_scale)
         ax.set_title("action", fontsize=20)
-        ax.set_xlabel("step", fontsize=16)
+        # 横轴 = policy_action_list 行下标（与 infer 追加次数一致），≠ env.step 次数
+        ax.set_xlabel("policy step (plot x)", fontsize=16)
         ax.set_xlim(0, history_size - 1)
         ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=4))
         ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.2f"))
