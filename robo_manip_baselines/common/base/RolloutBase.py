@@ -323,6 +323,15 @@ class RolloutBase(OperationDataMixin, ABC):
                 "(tidyup pick / B-side place timed eval). None = keep gym.make default."
             ),
         )
+        parser.add_argument(
+            "--pick_eval_min_lowest_z_above_floor_m",
+            type=float,
+            default=None,
+            help=(
+                "If set, override env.pick_eval_min_lowest_z_above_floor_m (ground baton pick eval). "
+                "None = keep gym.make default."
+            ),
+        )
 
         parser.add_argument(
             "--skip",
@@ -672,6 +681,12 @@ class RolloutBase(OperationDataMixin, ABC):
             if hasattr(u, "pick_eval_max_policy_action_steps"):
                 u.pick_eval_max_policy_action_steps = int(
                     self.args.pick_eval_max_policy_action_steps
+                )
+        if getattr(self.args, "pick_eval_min_lowest_z_above_floor_m", None) is not None:
+            u = self.env.unwrapped
+            if hasattr(u, "pick_eval_min_lowest_z_above_floor_m"):
+                u.pick_eval_min_lowest_z_above_floor_m = float(
+                    self.args.pick_eval_min_lowest_z_above_floor_m
                 )
         world_idx = self.args.world_idx_list[self.data_manager.episode_idx]
         self.data_manager.setup_env_world(world_idx)

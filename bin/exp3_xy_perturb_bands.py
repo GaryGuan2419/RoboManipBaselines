@@ -12,3 +12,6 @@ PERTURB_CM_SPECS = [
     (0.06, "12×12 cm"),
     (0.075, "15×15 cm"),
 ]
+
+# Ground baton 等：名义至 12×12 cm 的 8 档（不含 15×15）
+PERTURB_CM_SPECS_TO_12 = [s for s in PERTURB_CM_SPECS if s[0] <= 0.06 + 1e-9]
