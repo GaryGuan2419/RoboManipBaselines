@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """
-实验三主图：不同 XY 瓶位扰动带（1×1 … 10×10 cm 名义共 7 档）下 hsr_side_pick 成功率柱状图。
+实验三（handover receive）：Robot A 底盘世界系 XY 扰动带下，B 策略成功率柱状图。
 
-依赖：本仓库可 import；已安装 matplotlib、PyYAML；能跑 Rollout（GPU/CUDA 等与本机一致）。
+与 ``bin/plot_pick_xy_perturb_success.py`` 对称：扰动档见 ``bin/exp3_xy_perturb_bands.py``。
+子进程跑 ``Rollout``（ManiFlowPolicyHsrDualHandoverReceive + MujocoDualHsrHandoverReceive）。
 
-用法（在仓库根目录）::
+成功判据与 ``OperationMujocoDualHsrHandoverReceive`` / env 一致：第 70 个 policy step 后
+``compute_pick_eval_outcome``，baton 几何最低点世界 **z ≥ 0.05 m**（离地约 5 cm，不比 reset 基线）。
 
-  python bin/plot_pick_xy_perturb_success.py \\
-    --checkpoint robo_manip_baselines/checkpoint/ManiFlowPolicy/hsr_side_pick/policy_best.ckpt \\
-    --episodes 150
+用法（仓库根目录）::
 
-默认写出到 ``runs/exp3_hsr_side_pick/``（图、CSV、临时 yaml）；扰动档见 ``bin/exp3_xy_perturb_bands.py``。
+  CUDA_VISIBLE_DEVICES=0 nohup env PYTHONUNBUFFERED=1 \\
+    python bin/plot_handover_robot_a_xy_perturb_success.py \\
+    --checkpoint robo_manip_baselines/checkpoint/ManiFlowPolicy/hsr_handover_receive/policy_best.ckpt \\
+    --episodes 150 \\
+    > runs/exp3_hsr_handover_receive/nohup.log 2>&1 &
 
-总局数 = len(PERTURB_CM_SPECS) × --episodes（默认 7×150）。
+默认输出目录 ``runs/exp3_hsr_handover_receive/``（图、CSV、临时 yaml）；``--run-dir`` /
+``--out`` 可覆盖。总局数 = len(PERTURB_CM_SPECS) × --episodes。
 """
 
 from __future__ import annotations
@@ -37,12 +42,11 @@ if str(_bin_dir) not in sys.path:
     sys.path.insert(0, str(_bin_dir))
 from exp3_xy_perturb_bands import PERTURB_CM_SPECS  # noqa: E402
 
-DEFAULT_EXP3_RUN_DIR = Path("runs/exp3_hsr_side_pick")
-DEFAULT_EXP3_OUT_PNG = DEFAULT_EXP3_RUN_DIR / "pick_xy_perturb_bars.png"
+DEFAULT_EXP3_RUN_DIR = Path("runs/exp3_hsr_handover_receive")
+DEFAULT_EXP3_OUT_PNG = DEFAULT_EXP3_RUN_DIR / "handover_robot_a_xy_perturb_bars.png"
 
 
 def wilson_95_interval(k: int, n: int) -> tuple[float, float, float]:
-    """返回 (p_hat, lo, hi)，Wilson score 区间端点。"""
     if n <= 0:
         return 0.0, 0.0, 1.0
     z = 1.96
@@ -65,7 +69,6 @@ def run_rollout_batch(
     seed: int,
     max_duration: float,
 ) -> tuple[int, int, Path]:
-    """子进程跑 Rollout；返回 (成功数, 总局数, yaml 路径)。"""
     yaml_dir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.NamedTemporaryFile(
         suffix=".yaml", delete=False, dir=str(yaml_dir)
@@ -77,8 +80,8 @@ def run_rollout_batch(
         sys.executable,
         "-m",
         "robo_manip_baselines.bin.Rollout",
-        "ManiFlowPolicy",
-        "MujocoHsrTidyup",
+        "ManiFlowPolicyHsrDualHandoverReceive",
+        "MujocoDualHsrHandoverReceive",
         "--checkpoint",
         str(checkpoint),
         "--world_idx",
@@ -94,15 +97,17 @@ def run_rollout_batch(
         str(max_duration),
         "--seed",
         str(seed),
-        "--bottle_xy_reset_perturb_half_extent_m",
+        "--robot_a_xy_reset_perturb_half_extent_m",
         str(half_extent_m),
         "--result_filename",
         str(out_yaml),
     ]
-    print("[plot_pick_xy_perturb_success] RUN:", " ".join(cmd), flush=True)
+    print("[plot_handover_robot_a_xy_perturb_success] RUN:", " ".join(cmd), flush=True)
     r = subprocess.run(cmd, cwd=str(repo_root))
     if r.returncode != 0:
-        raise RuntimeError(f"Rollout failed with code {r.returncode} (h={half_extent_m})")
+        raise RuntimeError(
+            f"Rollout failed with code {r.returncode} (robot_a_xy h={half_extent_m})"
+        )
 
     with open(out_yaml, "r") as f:
         data = yaml.safe_load(f)
@@ -118,42 +123,37 @@ def main() -> None:
         "--checkpoint",
         type=Path,
         default=Path(
-            "robo_manip_baselines/checkpoint/ManiFlowPolicy/hsr_side_pick/policy_best.ckpt"
+            "robo_manip_baselines/checkpoint/ManiFlowPolicy/hsr_handover_receive/policy_best.ckpt"
         ),
-        help="policy_best.ckpt 路径（相对 cwd 或绝对）",
+        help="policy_best.ckpt（按你训练输出路径改）",
     )
     ap.add_argument(
         "--episodes",
         type=int,
         default=150,
-        help="每个扰动档跑多少局（150 够用；论文可 200）",
+        help="每个扰动档跑多少局",
     )
     ap.add_argument(
         "--out",
         type=Path,
         default=DEFAULT_EXP3_OUT_PNG,
-        help="输出主图 PNG（默认 runs/exp3_hsr_side_pick/pick_xy_perturb_bars.png）",
+        help="输出主图 PNG",
     )
     ap.add_argument(
         "--run-dir",
         type=Path,
         default=DEFAULT_EXP3_RUN_DIR,
-        help="Rollout 临时 yaml 目录（默认 runs/exp3_hsr_side_pick）",
+        help="Rollout 临时 yaml 目录",
     )
     ap.add_argument("--skip", type=int, default=2)
     ap.add_argument("--seed", type=int, default=-1, help="Rollout --seed（-1 表随机）")
     ap.add_argument(
         "--max_duration",
         type=float,
-        default=120.0,
-        help="每局 RolloutPhase 仿真时间兜底 [s]",
+        default=240.0,
+        help="每局 RolloutPhase 仿真时间兜底 [s]（交接比 pick 长）",
     )
-    ap.add_argument(
-        "--csv",
-        type=Path,
-        default=None,
-        help="可选：写出汇总 CSV（默认与 PNG 同 stem）",
-    )
+    ap.add_argument("--csv", type=Path, default=None, help="汇总 CSV（默认与 PNG 同 stem）")
     ap.add_argument(
         "--keep_intermediate_yaml",
         action="store_true",
@@ -195,7 +195,7 @@ def main() -> None:
         rows.append(
             {
                 "label": lab,
-                "half_extent_m": h_m,
+                "robot_a_xy_half_extent_m": h_m,
                 "successes": k,
                 "n": n,
                 "p_hat": ph,
@@ -205,7 +205,7 @@ def main() -> None:
             }
         )
         print(
-            f"[plot_pick_xy_perturb_success] {lab}: {k}/{n} = {100*ph:.1f}% "
+            f"[plot_handover_robot_a_xy_perturb_success] {lab}: {k}/{n} = {100*ph:.1f}% "
             f"(95% CI {100*lo:.1f}%–{100*hi:.1f}%)",
             flush=True,
         )
@@ -225,7 +225,7 @@ def main() -> None:
         p_list,
         yerr=[yerr_lo, yerr_hi],
         capsize=6,
-        color="#4C72B0",
+        color="#55A868",
         edgecolor="black",
         linewidth=0.6,
     )
@@ -233,13 +233,16 @@ def main() -> None:
     ax.set_xticklabels(labels, rotation=15, ha="right")
     ax.set_ylabel("success rate")
     ax.set_ylim(0.0, 1.05)
-    ax.set_title("ManiFlow hsr_side_pick (XY bottle perturbation)")
+    ax.set_title("ManiFlow dual-HSR handover receive (Robot A base XY perturbation)")
     ax.grid(axis="y", alpha=0.35)
     fig.tight_layout()
     args.out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.out)
     plt.close(fig)
-    print(f"[plot_pick_xy_perturb_success] Wrote figure: {args.out.resolve()}", flush=True)
+    print(
+        f"[plot_handover_robot_a_xy_perturb_success] Wrote figure: {args.out.resolve()}",
+        flush=True,
+    )
 
     csv_path = args.csv
     if csv_path is None:
@@ -249,7 +252,10 @@ def main() -> None:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
         w.writerows(rows)
-    print(f"[plot_pick_xy_perturb_success] Wrote table: {csv_path.resolve()}", flush=True)
+    print(
+        f"[plot_handover_robot_a_xy_perturb_success] Wrote table: {csv_path.resolve()}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

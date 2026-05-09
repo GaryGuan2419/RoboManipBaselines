@@ -23,7 +23,8 @@ HANDOVER_POSE_B = np.array([0.1787, -2.5480, 0.0102, 1.08, 0.0])
 HANDOVER_GRIPPER_B_OPEN = 0.8
 
 # ── Baton ─────────────────────────────────────────────────────────────────────
-HANDOVER_BATON_POS = np.array([1.0020, -0.0020, 0.2023])
+# z 较标定值 +0.05 m：棒心抬高 5 cm，减轻 A 端夹持时因相对高度/接触不良导致的滑落。
+HANDOVER_BATON_POS = np.array([1.0520, -0.0020, 0.2123])
 
 # Oracle navigation (bin/run_ultimate_hsr_line_demo.py, robo_manip_baselines/mllm/dual_hsr_handover_geometry.py):
 #   robot_base_target_xy = handover_landmark_xy + ORACLE_OFFSET_*_HANDOVER_XY

@@ -260,6 +260,25 @@ class RolloutBase(OperationDataMixin, ABC):
                 "None = keep gym.make / Operation default."
             ),
         )
+        parser.add_argument(
+            "--robot_a_xy_reset_perturb_half_extent_m",
+            type=float,
+            default=None,
+            help=(
+                "If set, override dual-HSR handover-receive env Robot A base XY reset half-extent [m] "
+                "(per-axis U[-h,h] each reset). None = keep gym.make / Operation default."
+            ),
+        )
+
+        parser.add_argument(
+            "--robot_b_xy_reset_perturb_half_extent_m",
+            type=float,
+            default=None,
+            help=(
+                "If set, override dual-HSR handover-receive env Robot B base XY reset half-extent [m] "
+                "(per-axis U[-h,h] each reset). None = keep gym.make / Operation default."
+            ),
+        )
 
         parser.add_argument(
             "--skip",
@@ -571,6 +590,18 @@ class RolloutBase(OperationDataMixin, ABC):
             if hasattr(u, "bottle_xy_reset_perturb_half_extent_m"):
                 u.bottle_xy_reset_perturb_half_extent_m = float(
                     self.args.bottle_xy_reset_perturb_half_extent_m
+                )
+        if getattr(self.args, "robot_a_xy_reset_perturb_half_extent_m", None) is not None:
+            u = self.env.unwrapped
+            if hasattr(u, "robot_a_xy_reset_perturb_half_extent_m"):
+                u.robot_a_xy_reset_perturb_half_extent_m = float(
+                    self.args.robot_a_xy_reset_perturb_half_extent_m
+                )
+        if getattr(self.args, "robot_b_xy_reset_perturb_half_extent_m", None) is not None:
+            u = self.env.unwrapped
+            if hasattr(u, "robot_b_xy_reset_perturb_half_extent_m"):
+                u.robot_b_xy_reset_perturb_half_extent_m = float(
+                    self.args.robot_b_xy_reset_perturb_half_extent_m
                 )
         world_idx = self.args.world_idx_list[self.data_manager.episode_idx]
         self.data_manager.setup_env_world(world_idx)

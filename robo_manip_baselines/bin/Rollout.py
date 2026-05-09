@@ -96,8 +96,28 @@ class RolloutMain:
         )
         RolloutPolicyClass = getattr(policy_module, f"Rollout{self.args.policy}")
 
+        def _merged_metaclass(env_cls, pol_cls):
+            a, b = type(env_cls), type(pol_cls)
+            if a is b:
+                return a
+            if issubclass(a, b):
+                return a
+            if issubclass(b, a):
+                return b
+            for first, second in ((a, b), (b, a)):
+                try:
+                    return type("_RolloutMergedMeta", (first, second), {})
+                except TypeError:
+                    continue
+            raise TypeError(
+                f"Cannot merge metaclasses {a!r} and {b!r} "
+                f"for Rollout({env_cls.__name__}, {pol_cls.__name__})"
+            )
+
+        RolloutMeta = _merged_metaclass(OperationEnvClass, RolloutPolicyClass)
+
         # The order of parent classes must not be changed in order to maintain the method resolution order (MRO)
-        class Rollout(OperationEnvClass, RolloutPolicyClass):
+        class Rollout(OperationEnvClass, RolloutPolicyClass, metaclass=RolloutMeta):
             @property
             def policy_name(self):
                 return remove_prefix(RolloutPolicyClass.__name__, "Rollout")
