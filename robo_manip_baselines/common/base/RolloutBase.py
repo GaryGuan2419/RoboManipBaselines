@@ -279,6 +279,50 @@ class RolloutBase(OperationDataMixin, ABC):
                 "(per-axis U[-h,h] each reset). None = keep gym.make / Operation default."
             ),
         )
+        parser.add_argument(
+            "--place_base_xy_reset_perturb_half_extent_m",
+            type=float,
+            default=None,
+            help=(
+                "If set, override MujocoHsrBSidePlaceEnv chassis XY reset half-extent [m] "
+                "(per-axis U[-h,h] each reset). None = keep gym.make / Operation default."
+            ),
+        )
+        parser.add_argument(
+            "--place_rollout_grip_lock_policy_steps",
+            type=int,
+            default=None,
+            help=(
+                "If set, first N policy-action steps (len(policy_action_list)≤N) force gripper cmd "
+                "on MujocoHsrBSidePlaceEnv rollouts. None = keep env default."
+            ),
+        )
+        parser.add_argument(
+            "--place_rollout_grip_lock_cmd",
+            type=float,
+            default=None,
+            help=(
+                "Gripper position target while locked (e.g. -0.5). "
+                "Used only when place_rollout_grip_lock_policy_steps is set. None = env default."
+            ),
+        )
+        parser.add_argument(
+            "--place_rollout_grip_lock_verbose",
+            action="store_true",
+            help=(
+                "If set, print each policy step (when env.step aligns with --skip) while the "
+                "B-side place grip lock is active: raw policy grip vs forced cmd."
+            ),
+        )
+        parser.add_argument(
+            "--pick_eval_max_policy_action_steps",
+            type=int,
+            default=None,
+            help=(
+                "If set, override env.pick_eval_max_policy_action_steps before reset "
+                "(tidyup pick / B-side place timed eval). None = keep gym.make default."
+            ),
+        )
 
         parser.add_argument(
             "--skip",
@@ -603,6 +647,32 @@ class RolloutBase(OperationDataMixin, ABC):
                 u.robot_b_xy_reset_perturb_half_extent_m = float(
                     self.args.robot_b_xy_reset_perturb_half_extent_m
                 )
+        if getattr(self.args, "place_base_xy_reset_perturb_half_extent_m", None) is not None:
+            u = self.env.unwrapped
+            if hasattr(u, "place_base_xy_reset_perturb_half_extent_m"):
+                u.place_base_xy_reset_perturb_half_extent_m = float(
+                    self.args.place_base_xy_reset_perturb_half_extent_m
+                )
+        if getattr(self.args, "place_rollout_grip_lock_policy_steps", None) is not None:
+            u = self.env.unwrapped
+            if hasattr(u, "place_rollout_grip_lock_policy_steps"):
+                u.place_rollout_grip_lock_policy_steps = int(
+                    self.args.place_rollout_grip_lock_policy_steps
+                )
+        if getattr(self.args, "place_rollout_grip_lock_cmd", None) is not None:
+            u = self.env.unwrapped
+            if hasattr(u, "place_rollout_grip_lock_cmd"):
+                u.place_rollout_grip_lock_cmd = float(self.args.place_rollout_grip_lock_cmd)
+        if hasattr(self.env.unwrapped, "place_rollout_grip_lock_verbose"):
+            self.env.unwrapped.place_rollout_grip_lock_verbose = bool(
+                getattr(self.args, "place_rollout_grip_lock_verbose", False)
+            )
+        if getattr(self.args, "pick_eval_max_policy_action_steps", None) is not None:
+            u = self.env.unwrapped
+            if hasattr(u, "pick_eval_max_policy_action_steps"):
+                u.pick_eval_max_policy_action_steps = int(
+                    self.args.pick_eval_max_policy_action_steps
+                )
         world_idx = self.args.world_idx_list[self.data_manager.episode_idx]
         self.data_manager.setup_env_world(world_idx)
         self.obs, self.info = self.env.reset(seed=self.args.seed)
@@ -667,6 +737,28 @@ class RolloutBase(OperationDataMixin, ABC):
             action_keys = self.action_keys
 
         is_skip = self.rollout_time_idx % self.args.skip != 0
+
+        env_u = self.env.unwrapped
+        n_grip_lock = int(
+            getattr(env_u, "place_rollout_grip_lock_policy_steps", 0) or 0
+        )
+        if n_grip_lock > 0 and len(self.policy_action_list) <= n_grip_lock:
+            gcmd = float(getattr(env_u, "place_rollout_grip_lock_cmd", -0.5))
+            pa = np.asarray(self.policy_action, dtype=np.float64).copy()
+            if pa.shape[0] >= 9:
+                raw_grip = float(pa[8])
+                pa[8] = gcmd
+                self.policy_action = pa
+                if (
+                    getattr(env_u, "place_rollout_grip_lock_verbose", False)
+                    and self.rollout_time_idx % self.args.skip == 0
+                ):
+                    print(
+                        f"[RolloutBase] place grip LOCK policy_step="
+                        f"{len(self.policy_action_list)}/{n_grip_lock}: "
+                        f"command_grip={gcmd} (policy_output_was={raw_grip:.4f})",
+                        flush=True,
+                    )
 
         # Handover receive: checkpoint action is [mobile_3, arm_5, grip_1] but ArmManager
         # COMMAND_JOINT_POS expects a 6-vector (arm indices + gripper index).
