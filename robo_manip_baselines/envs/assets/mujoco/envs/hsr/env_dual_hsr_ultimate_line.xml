@@ -75,12 +75,14 @@
             <geom type="mesh" mesh="tablet" material="hsr_black" pos="1e-3 0 0" />
             <body name="robot_a/head_l_stereo_camera_link" pos="0.02 0.07 0.061" quat="0.5 -0.5 0.5 -0.5">
               <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <camera name="robot_a/head_left" fovy="70" pos="0 0 0.1" euler="2 0 0" />
               <body name="robot_a/head_l_stereo_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
                 <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
               </body>
             </body>
             <body name="robot_a/head_r_stereo_camera_link" pos="0.02 -0.07 0.061" quat="0.5 -0.5 0.5 -0.5">
               <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <camera name="robot_a/head_right" fovy="70" pos="0 0 0.1" euler="2 0 0" />
               <body name="robot_a/head_r_stereo_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
                 <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
               </body>
@@ -241,12 +243,14 @@
             <geom type="mesh" mesh="tablet" material="hsr_black" pos="1e-3 0 0" />
             <body name="robot_b/head_l_stereo_camera_link" pos="0.02 0.07 0.061" quat="0.5 -0.5 0.5 -0.5">
               <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <camera name="robot_b/head_left" fovy="70" pos="0 0 0.1" euler="2 0 0" />
               <body name="robot_b/head_l_stereo_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
                 <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
               </body>
             </body>
             <body name="robot_b/head_r_stereo_camera_link" pos="0.02 -0.07 0.061" quat="0.5 -0.5 0.5 -0.5">
               <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
+              <camera name="robot_b/head_right" fovy="70" pos="0 0 0.1" euler="2 0 0" />
               <body name="robot_b/head_r_stereo_camera_gazebo_frame" quat="0.5 0.5 -0.5 0.5">
                 <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001" />
               </body>
@@ -371,6 +375,7 @@
 <!-- Handover (same framing vs handover_area as env_dual_hsr_demo.xml): dual handover x=1.0 -> ultimate x=0, shift (-1,0,0). -->
 <camera name="side_view" pos="-0.45 -0.7 0.35" xyaxes="1 0 0 0 0.3 1" fovy="65" />
 <camera name="overhead_view" pos="-1.2 0 3.0" xyaxes="0 -1 0 1 0 0" fovy="70" />
+<camera name="ultimate_line_god" pos="0 -3.0 2.1" xyaxes="1 0 0 0 0.55 0.83" fovy="62" />
 
 <!-- Pick: dual bottle x=-0.2 -> ultimate x=-2.0, extra shift (-1.8,0,0) on top of dual pick camera poses. -->
 <camera name="pick_side_view" pos="-1.82 -0.78 0.35" xyaxes="1 0 0 0 0.3 1" fovy="65" />
