@@ -2,13 +2,16 @@
 # Merge only the ultimate-line 9-camera replay sampling files from a git ref
 # into the current working tree. Does not switch branches or create a worktree.
 #
-# Typical server usage (inside an existing RoboManipBaselines checkout):
-#   git fetch myfork ultimate-line-9cam-sampling
-#   ./bin/sync_ultimate_line_sampling_git.sh
-#
-# First time on a tree that does not yet have this script:
+# Typical server usage (inside an existing RoboManipBaselines checkout).
+# First time only: this script did not exist on your branch until 7f6e275, so
+# fetch the ref then materialize the script from it, then run it:
 #   git fetch myfork ultimate-line-9cam-sampling
 #   git checkout myfork/ultimate-line-9cam-sampling -- bin/sync_ultimate_line_sampling_git.sh
+#   chmod +x bin/sync_ultimate_line_sampling_git.sh
+#   ./bin/sync_ultimate_line_sampling_git.sh
+#
+# Later updates:
+#   git fetch myfork ultimate-line-9cam-sampling
 #   ./bin/sync_ultimate_line_sampling_git.sh
 #
 # Override ref / remote:
