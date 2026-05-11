@@ -6,6 +6,11 @@
 #   git fetch myfork ultimate-line-9cam-sampling
 #   ./bin/sync_ultimate_line_sampling_git.sh
 #
+# First time on a tree that does not yet have this script:
+#   git fetch myfork ultimate-line-9cam-sampling
+#   git checkout myfork/ultimate-line-9cam-sampling -- bin/sync_ultimate_line_sampling_git.sh
+#   ./bin/sync_ultimate_line_sampling_git.sh
+#
 # Override ref / remote:
 #   ./bin/sync_ultimate_line_sampling_git.sh myfork/ultimate-line-9cam-sampling
 #   GIT_SYNC_REMOTE=myfork GIT_SYNC_BRANCH=ultimate-line-9cam-sampling ./bin/sync_ultimate_line_sampling_git.sh
